@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Win32;
@@ -28,8 +29,8 @@ public sealed class Settings
         {
             if (File.Exists(SettingsPath))
             {
-                string json = File.ReadAllText(SettingsPath);
-                Settings settings = JsonSerializer.Deserialize(json, PeekDesktopJsonContext.Default.Settings) ?? new Settings();
+                byte[] jsonBytes = File.ReadAllBytes(SettingsPath);
+                Settings settings = DeserializeUtf8(jsonBytes);
                 PeekMode normalizedMode = NormalizePeekMode(settings.PeekMode);
                 if (settings.PeekMode != normalizedMode)
                 {
@@ -53,13 +54,74 @@ public sealed class Settings
         try
         {
             Directory.CreateDirectory(SettingsDir);
-            string json = JsonSerializer.Serialize(this, PeekDesktopJsonContext.Default.Settings);
-            File.WriteAllText(SettingsPath, json);
+            byte[] jsonBytes = SerializeUtf8();
+            File.WriteAllBytes(SettingsPath, jsonBytes);
         }
         catch (Exception ex)
         {
             AppDiagnostics.Log($"Failed to save settings to {SettingsPath}: {ex.Message}");
         }
+    }
+
+    private static Settings DeserializeUtf8(ReadOnlySpan<byte> utf8Json)
+    {
+        var settings = new Settings();
+        var reader = new Utf8JsonReader(utf8Json);
+
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            return settings;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+                break;
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+                continue;
+
+            if (reader.ValueTextEquals("Enabled"u8))
+            {
+                reader.Read();
+                settings.Enabled = reader.GetBoolean();
+            }
+            else if (reader.ValueTextEquals("StartWithWindows"u8))
+            {
+                reader.Read();
+                settings.StartWithWindows = reader.GetBoolean();
+            }
+            else if (reader.ValueTextEquals("RequireDoubleClick"u8))
+            {
+                reader.Read();
+                settings.RequireDoubleClick = reader.GetBoolean();
+            }
+            else if (reader.ValueTextEquals("PeekMode"u8))
+            {
+                reader.Read();
+                settings.PeekMode = (PeekMode)reader.GetInt32();
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        return settings;
+    }
+
+    private byte[] SerializeUtf8()
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+        writer.WriteBoolean("Enabled"u8, Enabled);
+        writer.WriteBoolean("StartWithWindows"u8, StartWithWindows);
+        writer.WriteBoolean("RequireDoubleClick"u8, RequireDoubleClick);
+        writer.WriteNumber("PeekMode"u8, (int)PeekMode);
+        writer.WriteEndObject();
+
+        writer.Flush();
+        return buffer.WrittenSpan.ToArray();
     }
 
     private static PeekMode NormalizePeekMode(PeekMode peekMode)
