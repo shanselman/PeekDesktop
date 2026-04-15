@@ -72,11 +72,11 @@ public sealed class MouseHook : IDisposable
     /// It captures the click point and posts the heavier classification
     /// work to the UI thread.
     /// </summary>
-    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    private unsafe IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0 && wParam == (IntPtr)NativeMethods.WM_LBUTTONDOWN)
         {
-            var hookStruct = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+            var hookStruct = *(NativeMethods.MSLLHOOKSTRUCT*)lParam;
             var clickPoint = hookStruct.pt;
 
             if (RequireDoubleClick)

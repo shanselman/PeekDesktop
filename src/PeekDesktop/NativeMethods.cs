@@ -626,7 +626,7 @@ internal static class NativeMethods
         return IntPtr.Zero;
     }
 
-    private static bool TryListViewHitTest(IntPtr listView, ref LVHITTESTINFO hitTest, out bool isOnItem)
+    private static unsafe bool TryListViewHitTest(IntPtr listView, ref LVHITTESTINFO hitTest, out bool isOnItem)
     {
         isOnItem = false;
 
@@ -664,7 +664,7 @@ internal static class NativeMethods
                 return false;
 
             Marshal.Copy(bytes, 0, localBuffer, size);
-            hitTest = Marshal.PtrToStructure<LVHITTESTINFO>(localBuffer);
+            hitTest = *(LVHITTESTINFO*)localBuffer;
 
             isOnItem = messageResult.ToInt64() >= 0 || (hitTest.flags & LVHT_ONITEM) != 0;
             return true;
