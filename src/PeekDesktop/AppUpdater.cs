@@ -106,11 +106,7 @@ internal sealed class AppUpdater
     public void OpenLatestReleasePage()
     {
         string url = _latestReleaseUrl ?? ReleasesPageUrl;
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
+        NativeMethods.ShellExecuteW(IntPtr.Zero, "open", url, null, null, NativeMethods.SW_SHOWNORMAL);
     }
 
     private void RaiseUpdateAvailable(string version, string releaseUrl)

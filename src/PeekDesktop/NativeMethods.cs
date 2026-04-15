@@ -704,6 +704,17 @@ internal static class NativeMethods
     }
 
     #endregion
+
+    // --- Shell ---
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr ShellExecuteW(
+        IntPtr hwnd,
+        string? lpOperation,
+        string lpFile,
+        string? lpParameters,
+        string? lpDirectory,
+        int nShowCmd);
 }
 
 /// <summary>
