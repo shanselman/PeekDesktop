@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -170,15 +169,14 @@ internal sealed class AppUpdater
 
     private static string GetCurrentVersion()
     {
-        var assembly = typeof(Program).Assembly;
-        Version? assemblyVersion = assembly.GetName().Version;
-        string? informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var (productVersion, fileVersion) = NativeMethods.GetExeVersionInfo();
+        string? informationalVersion = productVersion;
         string rawVersion;
 
         if (!string.IsNullOrWhiteSpace(informationalVersion))
         {
             string normalizedInformational = NormalizeVersion(informationalVersion);
-            string normalizedAssembly = assemblyVersion is null ? string.Empty : NormalizeVersion(assemblyVersion.ToString());
+            string normalizedAssembly = fileVersion is null ? string.Empty : NormalizeVersion(fileVersion.ToString());
             string numericInformational = ExtractNumericPrefix(normalizedInformational);
             string numericAssembly = ExtractNumericPrefix(normalizedAssembly);
 
@@ -190,9 +188,9 @@ internal sealed class AppUpdater
         }
         else
         {
-            rawVersion = assemblyVersion is null || assemblyVersion == new Version(1, 0, 0, 0)
+            rawVersion = fileVersion is null || fileVersion == new Version(1, 0, 0, 0)
                 ? "0.0.0-dev"
-                : assemblyVersion.ToString();
+                : fileVersion.ToString();
         }
 
         return NormalizeVersion(rawVersion);

@@ -715,6 +715,68 @@ internal static class NativeMethods
         string? lpParameters,
         string? lpDirectory,
         int nShowCmd);
+
+    // --- Version info ---
+
+    private const uint FILE_VER_GET_NEUTRAL = 0x02;
+
+    [DllImport("version.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFileVersionInfoSizeExW(uint dwFlags, string lpwstrFilename, out uint lpdwHandle);
+
+    [DllImport("version.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileVersionInfoExW(uint dwFlags, string lpwstrFilename, uint dwHandle, uint dwLen, byte[] lpData);
+
+    [DllImport("version.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool VerQueryValueW(byte[] pBlock, string lpSubBlock, out IntPtr lplpBuffer, out uint puLen);
+
+    /// <summary>
+    /// Reads version information from the current executable's PE version resource
+    /// via GetFileVersionInfoExW, replacing reflection-based version lookups.
+    /// ProductVersion = StringFileInfo ProductVersion = AssemblyInformationalVersion.
+    /// FileVersion = VS_FIXEDFILEINFO dwFileVersion = /p:FileVersion (= AssemblyVersion in CI).
+    /// </summary>
+    public static (string? ProductVersion, Version? FileVersion) GetExeVersionInfo()
+    {
+        string? exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath))
+            return (null, null);
+
+        uint size = GetFileVersionInfoSizeExW(FILE_VER_GET_NEUTRAL, exePath, out uint handle);
+        if (size == 0)
+            return (null, null);
+
+        byte[] data = new byte[size];
+        if (!GetFileVersionInfoExW(FILE_VER_GET_NEUTRAL, exePath, handle, size, data))
+            return (null, null);
+
+        // Numeric version from VS_FIXEDFILEINFO (52-byte struct, dwFileVersionMS at offset 8)
+        Version? fileVersion = null;
+        if (VerQueryValueW(data, @"\", out IntPtr fixedPtr, out uint fixedLen) && fixedLen >= 52)
+        {
+            uint vms = (uint)Marshal.ReadInt32(fixedPtr, 8);
+            uint vls = (uint)Marshal.ReadInt32(fixedPtr, 12);
+            fileVersion = new Version(
+                (int)(vms >> 16), (int)(vms & 0xFFFF),
+                (int)(vls >> 16), (int)(vls & 0xFFFF));
+        }
+
+        // ProductVersion string (= AssemblyInformationalVersion) from the string table
+        string? productVersion = null;
+        if (VerQueryValueW(data, @"\VarFileInfo\Translation", out IntPtr transPtr, out uint transLen) && transLen >= 4)
+        {
+            ushort lang = (ushort)Marshal.ReadInt16(transPtr, 0);
+            ushort cp = (ushort)Marshal.ReadInt16(transPtr, 2);
+            string subBlock = $@"\StringFileInfo\{lang:x4}{cp:x4}\ProductVersion";
+            if (VerQueryValueW(data, subBlock, out IntPtr strPtr, out uint strLen) && strLen > 0)
+            {
+                productVersion = Marshal.PtrToStringUni(strPtr);
+            }
+        }
+
+        return (productVersion, fileVersion);
+    }
 }
 
 /// <summary>
