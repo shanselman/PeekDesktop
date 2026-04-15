@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace PeekDesktop;
@@ -16,7 +17,7 @@ internal sealed class Win32MessageLoop : IDisposable
     private const uint WM_TIMER = 0x0113;
     private const uint WM_APP_CALLBACK = 0x8001; // WM_APP + 1, for cross-thread callbacks
 
-    private readonly NativeMethods.WndProc _wndProcDelegate; // prevent GC
+    private static Win32MessageLoop? s_instance;
     private readonly System.Collections.Generic.Dictionary<nuint, Action> _deferredActions = new();
     private readonly ConcurrentQueue<Action> _callbackQueue = new();
     private IntPtr _hwnd;
@@ -42,15 +43,15 @@ internal sealed class Win32MessageLoop : IDisposable
     /// </summary>
     public event Action? TaskbarCreated;
 
-    public Win32MessageLoop()
+    public unsafe Win32MessageLoop()
     {
-        _wndProcDelegate = WndProc;
+        s_instance = this;
         TaskbarCreatedMessage = RegisterWindowMessageW("TaskbarCreated");
 
         var wc = new WNDCLASSEXW
         {
             cbSize = (uint)Marshal.SizeOf<WNDCLASSEXW>(),
-            lpfnWndProc = _wndProcDelegate,
+            lpfnWndProc = (IntPtr)(delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr, IntPtr, IntPtr>)&StaticWndProc,
             hInstance = NativeMethods.GetModuleHandle(null),
             lpszClassName = ClassName
         };
@@ -112,7 +113,15 @@ internal sealed class Win32MessageLoop : IDisposable
         PostQuitMessage(0);
     }
 
-    private IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static IntPtr StaticWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (s_instance is { } self)
+            return self.HandleMessage(hwnd, msg, wParam, lParam);
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+
+    private IntPtr HandleMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (msg == WM_TIMER)
         {
@@ -153,6 +162,7 @@ internal sealed class Win32MessageLoop : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        s_instance = null;
 
         if (_hwnd != IntPtr.Zero)
         {
@@ -170,8 +180,7 @@ internal sealed class Win32MessageLoop : IDisposable
     {
         public uint cbSize;
         public uint style;
-        [MarshalAs(UnmanagedType.FunctionPtr)]
-        public NativeMethods.WndProc lpfnWndProc;
+        public IntPtr lpfnWndProc;
         public int cbClsExtra;
         public int cbWndExtra;
         public IntPtr hInstance;
