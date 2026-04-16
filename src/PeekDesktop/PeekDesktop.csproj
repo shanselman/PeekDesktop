@@ -17,12 +17,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <StackTraceSupport>false</StackTraceSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
-    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
-    <EventSourceSupport>false</EventSourceSupport>
-    <DebuggerSupport>false</DebuggerSupport>
-    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
-    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishLzmaCompressed>true</PublishLzmaCompressed>
   </PropertyGroup>
 
   <!-- VirtualDesktopService.cs is excluded under AOT because it relies on
