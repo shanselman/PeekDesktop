@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 
 namespace PeekDesktop;
 
@@ -437,26 +435,9 @@ public sealed class DesktopPeek : IDisposable
     {
         processName = string.Empty;
         _ = NativeMethods.GetWindowThreadProcessId(foregroundWindow, out uint processId);
-        if (processId == 0 || processId > int.MaxValue)
+        if (processId == 0)
             return false;
 
-        try
-        {
-            using Process process = Process.GetProcessById((int)processId);
-            processName = process.ProcessName;
-            return !string.IsNullOrWhiteSpace(processName);
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-        catch (Win32Exception)
-        {
-            return false;
-        }
+        return NativeMethods.TryGetProcessName(processId, out processName);
     }
 }

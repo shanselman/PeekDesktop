@@ -80,6 +80,7 @@ internal static class NativeMethods
     private const uint LVHT_ONITEM = LVHT_ONITEMICON | LVHT_ONITEMLABEL | LVHT_ONITEMSTATEICON;
 
     // --- Remote memory helpers ---
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     private const uint PROCESS_VM_OPERATION = 0x0008;
     private const uint PROCESS_VM_READ = 0x0010;
     private const uint PROCESS_VM_WRITE = 0x0020;
@@ -418,6 +419,10 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwProcessId);
 
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryFullProcessImageNameW(IntPtr hProcess, uint dwFlags, StringBuilder lpExeName, ref uint lpdwSize);
+
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
@@ -720,7 +725,7 @@ internal static class NativeMethods
                 return false;
 
             Marshal.Copy(bytes, 0, localBuffer, size);
-            hitTest = Marshal.PtrToStructure<LVHITTESTINFO>(localBuffer);
+            unsafe { hitTest = *(LVHITTESTINFO*)localBuffer; }
 
             isOnItem = messageResult.ToInt64() >= 0 || (hitTest.flags & LVHT_ONITEM) != 0;
             return true;
@@ -734,6 +739,37 @@ internal static class NativeMethods
                 VirtualFreeEx(processHandle, remoteBuffer, 0, MEM_RELEASE);
 
             CloseHandle(processHandle);
+        }
+    }
+
+    /// <summary>
+    /// Gets the process name (without extension) for a given process ID using Win32 APIs.
+    /// </summary>
+    public static bool TryGetProcessName(uint processId, out string processName)
+    {
+        processName = string.Empty;
+        if (processId == 0)
+            return false;
+
+        IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+        if (hProcess == IntPtr.Zero)
+            return false;
+
+        try
+        {
+            uint size = 1024;
+            var buffer = new StringBuilder((int)size);
+            if (!QueryFullProcessImageNameW(hProcess, 0, buffer, ref size))
+                return false;
+
+            string fullPath = buffer.ToString();
+            // Extract file name without extension, matching Process.ProcessName behavior
+            processName = System.IO.Path.GetFileNameWithoutExtension(fullPath);
+            return !string.IsNullOrWhiteSpace(processName);
+        }
+        finally
+        {
+            CloseHandle(hProcess);
         }
     }
 
