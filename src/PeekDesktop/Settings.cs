@@ -166,7 +166,13 @@ public sealed class Settings
             if (enabled)
             {
                 string exePath = Environment.ProcessPath ?? "";
-                key.SetValue(valueName, $"\"{exePath}\"");
+                if (string.IsNullOrWhiteSpace(exePath))
+                    return;
+
+                string startupCommand = $"\"{exePath}\"";
+                string? currentValue = key.GetValue(valueName) as string;
+                if (!string.Equals(currentValue, startupCommand, StringComparison.OrdinalIgnoreCase))
+                    key.SetValue(valueName, startupCommand);
             }
             else
             {
