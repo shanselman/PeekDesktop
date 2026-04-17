@@ -70,7 +70,20 @@ internal static class NativeMethods
     private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const ushort VK_LWIN = 0x5B;
+    private const ushort VK_RWIN = 0x5C;
     private const ushort VK_D = 0x44;
+    private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_CONTROL = 0x11;
+    private const ushort VK_MENU = 0x12;
+    private const ushort VK_LSHIFT = 0xA0;
+    private const ushort VK_RSHIFT = 0xA1;
+    private const ushort VK_LCONTROL = 0xA2;
+    private const ushort VK_RCONTROL = 0xA3;
+    private const ushort VK_LMENU = 0xA4;
+    private const ushort VK_RMENU = 0xA5;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 
     // --- MSAA accessible roles ---
     public const int ROLE_SYSTEM_LISTITEM = 0x22;
@@ -624,6 +637,30 @@ internal static class NativeMethods
 
     private static bool TryToggleDesktopWithWinD()
     {
+        // Modifier hygiene: if another key (e.g. a global hotkey like Ctrl+F12)
+        // caused us to be invoked while the user is still physically holding
+        // Ctrl / Alt / Shift / Win, injecting Win+D would be interpreted by
+        // Windows as (for example) Ctrl+Win+D — which creates a new virtual
+        // desktop. Release any physically-held modifier first so the injected
+        // Win+D is seen in isolation. The user's physical key-up will still
+        // fire later and is harmless.
+        var prelude = new System.Collections.Generic.List<INPUT>(8);
+        AddModifierReleaseIfDown(prelude, VK_LCONTROL);
+        AddModifierReleaseIfDown(prelude, VK_RCONTROL);
+        AddModifierReleaseIfDown(prelude, VK_LMENU);
+        AddModifierReleaseIfDown(prelude, VK_RMENU);
+        AddModifierReleaseIfDown(prelude, VK_LSHIFT);
+        AddModifierReleaseIfDown(prelude, VK_RSHIFT);
+        AddModifierReleaseIfDown(prelude, VK_LWIN, extendedKey: true);
+        AddModifierReleaseIfDown(prelude, VK_RWIN, extendedKey: true);
+
+        if (prelude.Count > 0)
+        {
+            INPUT[] preludeArr = prelude.ToArray();
+            uint preSent = SendInput((uint)preludeArr.Length, preludeArr, Marshal.SizeOf<INPUT>());
+            AppDiagnostics.Log($"Released {preSent}/{preludeArr.Length} held modifier(s) before Win+D injection");
+        }
+
         INPUT[] inputs =
         [
             CreateKeyInput(VK_LWIN, keyUp: false, extendedKey: true),
@@ -641,6 +678,13 @@ internal static class NativeMethods
         }
 
         return true;
+    }
+
+    private static void AddModifierReleaseIfDown(System.Collections.Generic.List<INPUT> list, ushort vk, bool extendedKey = false)
+    {
+        // High bit of GetAsyncKeyState = currently down.
+        if ((GetAsyncKeyState(vk) & 0x8000) != 0)
+            list.Add(CreateKeyInput(vk, keyUp: true, extendedKey: extendedKey));
     }
 
     private static IntPtr FindAncestorByClassName(IntPtr hwnd, string className)
