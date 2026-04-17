@@ -62,6 +62,7 @@ public static class Program
     private static void Initialize(Win32MessageLoop messageLoop)
     {
         var settings = Settings.Load();
+        Settings.SetAutoStart(settings.StartWithWindows);
         _desktopPeek = new DesktopPeek(settings);
         _appUpdater = new AppUpdater(messageLoop);
         _trayIcon = new TrayIcon(messageLoop, _desktopPeek, _appUpdater, settings, () => messageLoop.Quit());
