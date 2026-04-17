@@ -25,12 +25,12 @@ public sealed class Settings
     public bool PeekOnTaskbarClick { get; set; } = false;
     public PeekMode PeekMode { get; set; } = PeekMode.NativeShowDesktop;
 
-    // Global hotkey: defaults to Ctrl+Alt+P ('P' = 0x50), disabled by default
+    // Global hotkey: defaults to Ctrl+F12 (VK_F12 = 0x7B), disabled by default
     // to avoid claiming a combo the user may already be using. Turn it on via
     // the tray menu.
     public bool HotkeyEnabled { get; set; } = false;
-    public uint HotkeyModifiers { get; set; } = 0x0001 /* MOD_ALT */ | 0x0002 /* MOD_CONTROL */;
-    public uint HotkeyVk { get; set; } = 0x50; // 'P'
+    public uint HotkeyModifiers { get; set; } = 0x0002 /* MOD_CONTROL */;
+    public uint HotkeyVk { get; set; } = 0x7B; // VK_F12
 
     public static Settings Load()
     {
