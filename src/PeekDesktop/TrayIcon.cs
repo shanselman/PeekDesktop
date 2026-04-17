@@ -81,6 +81,13 @@ internal sealed class TrayIcon : IDisposable
                 return (true, IntPtr.Zero);
             }
 
+            if (Win32TrayIcon.IsLeftClick(lParam))
+            {
+                AppDiagnostics.Log("Tray icon left-clicked; toggling peek");
+                _desktopPeek.TogglePeek();
+                return (true, IntPtr.Zero);
+            }
+
             if (Win32TrayIcon.IsBalloonClick(lParam))
             {
                 _appUpdater.OpenLatestReleasePage();

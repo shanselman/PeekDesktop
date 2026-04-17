@@ -106,6 +106,16 @@ internal sealed class Win32TrayIcon : IDisposable
         LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU;
 
     /// <summary>
+    /// Returns true if lParam represents a left-click (mouse select or keyboard
+    /// activation) on the tray icon. Requires NOTIFYICON_VERSION_4 behavior.
+    /// </summary>
+    public static bool IsLeftClick(IntPtr lParam)
+    {
+        ushort code = LOWORD(lParam);
+        return code == NIN_SELECT || code == NIN_KEYSELECT;
+    }
+
+    /// <summary>
     /// Returns true if lParam represents a left double-click on the tray icon.
     /// </summary>
     public static bool IsLeftDoubleClick(IntPtr lParam) =>
@@ -143,6 +153,8 @@ internal sealed class Win32TrayIcon : IDisposable
     private const ushort WM_RBUTTONUP = 0x0205;
     private const ushort WM_LBUTTONDBLCLK = 0x0203;
     private const ushort WM_CONTEXTMENU = 0x007B;
+    private const ushort NIN_SELECT = 0x0400;
+    private const ushort NIN_KEYSELECT = 0x0401;
     private const ushort NIN_BALLOONUSERCLICK = 0x0405;
 
     // --- Struct ---
