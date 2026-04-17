@@ -15,7 +15,9 @@ internal static class NativeMethods
     public const int WH_MOUSE_LL = 14;
 
     // --- Mouse messages ---
+    public const int WM_MOUSEMOVE = 0x0200;
     public const int WM_LBUTTONDOWN = 0x0201;
+    public const int WM_LBUTTONUP = 0x0202;
 
     // --- ShowWindow commands ---
     public const int SW_SHOWNORMAL = 1;
@@ -282,6 +284,8 @@ internal static class NativeMethods
 
     public const int SM_CXDOUBLECLK = 36;
     public const int SM_CYDOUBLECLK = 37;
+    public const int SM_CXDRAG = 68;
+    public const int SM_CYDRAG = 69;
 
     // --- Monitor info ---
     public const uint MONITOR_DEFAULTTONEAREST = 2;

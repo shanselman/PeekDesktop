@@ -22,6 +22,12 @@ public sealed class MouseHook : IDisposable
     private long _lastClickTick;
     private NativeMethods.POINT _lastClickPoint;
 
+    // Pending-click state: we defer firing the classification event until WM_LBUTTONUP
+    // so we can suppress the peek when the user is actually drag-selecting icons
+    // on the desktop (e.g. marquee multi-select). See issue #35.
+    private bool _hasPendingClick;
+    private NativeMethods.POINT _pendingDownPoint;
+
     /// <summary>
     /// When true, only double-clicks trigger desktop peek (single clicks are ignored).
     /// </summary>
@@ -74,44 +80,95 @@ public sealed class MouseHook : IDisposable
     /// </summary>
     private unsafe IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && wParam == (IntPtr)NativeMethods.WM_LBUTTONDOWN)
+        if (nCode >= 0)
         {
-            var hookStruct = *(NativeMethods.MSLLHOOKSTRUCT*)lParam;
-            var clickPoint = hookStruct.pt;
+            int message = wParam.ToInt32();
 
-            if (RequireDoubleClick)
+            if (message == NativeMethods.WM_LBUTTONDOWN)
             {
-                long now = Environment.TickCount64;
-                uint doubleClickTime = NativeMethods.GetDoubleClickTime();
-                int cxThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXDOUBLECLK) / 2;
-                int cyThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYDOUBLECLK) / 2;
+                var hookStruct = *(NativeMethods.MSLLHOOKSTRUCT*)lParam;
+                var clickPoint = hookStruct.pt;
 
-                bool withinTime = (now - _lastClickTick) <= doubleClickTime;
-                bool withinDistance = Math.Abs(clickPoint.x - _lastClickPoint.x) <= cxThreshold
-                                  && Math.Abs(clickPoint.y - _lastClickPoint.y) <= cyThreshold;
-
-                _lastClickTick = now;
-                _lastClickPoint = clickPoint;
-
-                if (!(withinTime && withinDistance))
+                if (RequireDoubleClick)
                 {
-                    // First click of a potential double-click — swallow it
-                    return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    long now = Environment.TickCount64;
+                    uint doubleClickTime = NativeMethods.GetDoubleClickTime();
+                    int cxThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXDOUBLECLK) / 2;
+                    int cyThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYDOUBLECLK) / 2;
+
+                    bool withinTime = (now - _lastClickTick) <= doubleClickTime;
+                    bool withinDistance = Math.Abs(clickPoint.x - _lastClickPoint.x) <= cxThreshold
+                                      && Math.Abs(clickPoint.y - _lastClickPoint.y) <= cyThreshold;
+
+                    _lastClickTick = now;
+                    _lastClickPoint = clickPoint;
+
+                    if (!(withinTime && withinDistance))
+                    {
+                        // First click of a potential double-click — don't arm the pending trigger yet
+                        _hasPendingClick = false;
+                        return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+                    }
+
+                    // Reset so a third click doesn't also fire
+                    _lastClickTick = 0;
                 }
 
-                // Reset so a third click doesn't also fire
-                _lastClickTick = 0;
+                // Arm a pending click; the actual classification + event will fire
+                // on WM_LBUTTONUP, unless the user drags beyond the drag threshold
+                // (which indicates a marquee / drag-select gesture).
+                _hasPendingClick = true;
+                _pendingDownPoint = clickPoint;
             }
+            else if (message == NativeMethods.WM_MOUSEMOVE)
+            {
+                if (_hasPendingClick)
+                {
+                    var hookStruct = *(NativeMethods.MSLLHOOKSTRUCT*)lParam;
+                    if (HasExceededDragThreshold(_pendingDownPoint, hookStruct.pt))
+                    {
+                        _hasPendingClick = false;
+                        AppDiagnostics.Log("Pending peek click cancelled (drag detected)");
+                    }
+                }
+            }
+            else if (message == NativeMethods.WM_LBUTTONUP)
+            {
+                if (_hasPendingClick)
+                {
+                    _hasPendingClick = false;
+                    var hookStruct = *(NativeMethods.MSLLHOOKSTRUCT*)lParam;
+                    var upPoint = hookStruct.pt;
 
-            IntPtr windowUnderCursor = NativeMethods.WindowFromPoint(clickPoint);
+                    if (HasExceededDragThreshold(_pendingDownPoint, upPoint))
+                    {
+                        AppDiagnostics.Log("Pending peek click cancelled on mouse-up (drag detected)");
+                    }
+                    else
+                    {
+                        // Classify based on the original press location so a tiny
+                        // cursor jitter during the click doesn't change the target.
+                        var classifyPoint = _pendingDownPoint;
+                        IntPtr windowUnderCursor = NativeMethods.WindowFromPoint(classifyPoint);
 
-            if (_syncContext is not null)
-                _syncContext.Post(_ => HandleMouseClick(windowUnderCursor, clickPoint), null);
-            else
-                HandleMouseClick(windowUnderCursor, clickPoint);
+                        if (_syncContext is not null)
+                            _syncContext.Post(_ => HandleMouseClick(windowUnderCursor, classifyPoint), null);
+                        else
+                            HandleMouseClick(windowUnderCursor, classifyPoint);
+                    }
+                }
+            }
         }
 
         return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    private static bool HasExceededDragThreshold(NativeMethods.POINT from, NativeMethods.POINT to)
+    {
+        int cxDrag = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXDRAG);
+        int cyDrag = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYDRAG);
+        return Math.Abs(to.x - from.x) > cxDrag
+            || Math.Abs(to.y - from.y) > cyDrag;
     }
 
     private void HandleMouseClick(IntPtr windowUnderCursor, NativeMethods.POINT clickPoint)
