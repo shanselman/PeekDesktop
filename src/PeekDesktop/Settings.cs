@@ -167,7 +167,10 @@ public sealed class Settings
             {
                 string exePath = Environment.ProcessPath ?? "";
                 if (string.IsNullOrWhiteSpace(exePath))
+                {
+                    AppDiagnostics.Log("Auto-start registry update skipped: process path is unavailable.");
                     return;
+                }
 
                 string startupCommand = $"\"{exePath}\"";
                 string? currentValue = key.GetValue(valueName) as string;
@@ -179,9 +182,9 @@ public sealed class Settings
                 key.DeleteValue(valueName, throwOnMissingValue: false);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort — might fail in rare edge cases
+            AppDiagnostics.Log($"Failed to update auto-start registry entry: {ex.Message}");
         }
     }
 }
