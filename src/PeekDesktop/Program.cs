@@ -58,6 +58,7 @@ public static class Program
     private static DesktopPeek? _desktopPeek;
     private static TrayIcon? _trayIcon;
     private static AppUpdater? _appUpdater;
+    private static HotKey? _hotKey;
 
     private static void Initialize(Win32MessageLoop messageLoop)
     {
@@ -65,7 +66,26 @@ public static class Program
         Settings.SetAutoStart(settings.StartWithWindows);
         _desktopPeek = new DesktopPeek(settings);
         _appUpdater = new AppUpdater(messageLoop);
-        _trayIcon = new TrayIcon(messageLoop, _desktopPeek, _appUpdater, settings, () => messageLoop.Quit());
+        _hotKey = new HotKey(messageLoop);
+        _hotKey.Pressed += () =>
+        {
+            AppDiagnostics.Log("Global hotkey pressed; toggling peek");
+            _desktopPeek.TogglePeek();
+        };
+        _trayIcon = new TrayIcon(messageLoop, _desktopPeek, _appUpdater, _hotKey, settings, () => messageLoop.Quit());
+
+        if (settings.HotkeyEnabled)
+        {
+            if (!_hotKey.Register(settings.HotkeyModifiers, settings.HotkeyVk))
+            {
+                // Another app owns the combo. Persist the "off" state so we
+                // don't spam the user on every launch; they can re-enable it
+                // from the tray menu once the conflict is resolved.
+                AppDiagnostics.Log("Hotkey disabled on startup due to registration failure");
+                settings.HotkeyEnabled = false;
+                settings.Save();
+            }
+        }
 
         if (settings.Enabled)
             _desktopPeek.Start();

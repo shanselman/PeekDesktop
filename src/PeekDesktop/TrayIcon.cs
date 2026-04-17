@@ -16,6 +16,7 @@ internal sealed class TrayIcon : IDisposable
     private const uint ID_DOUBLECLICK = 3;
     private const uint ID_GAME_GUARD = 4;
     private const uint ID_TASKBAR_CLICK = 5;
+    private const uint ID_HOTKEY = 6;
     private const uint ID_MODE_MINIMIZE = 10;
     private const uint ID_MODE_FLYAWAY = 11;
     private const uint ID_MODE_NATIVE = 12;
@@ -27,14 +28,16 @@ internal sealed class TrayIcon : IDisposable
     private readonly Win32MessageLoop _messageLoop;
     private readonly DesktopPeek _desktopPeek;
     private readonly AppUpdater _appUpdater;
+    private readonly HotKey _hotKey;
     private readonly Settings _settings;
     private readonly Action _exitAction;
 
-    public TrayIcon(Win32MessageLoop messageLoop, DesktopPeek desktopPeek, AppUpdater appUpdater, Settings settings, Action exitAction)
+    public TrayIcon(Win32MessageLoop messageLoop, DesktopPeek desktopPeek, AppUpdater appUpdater, HotKey hotKey, Settings settings, Action exitAction)
     {
         _messageLoop = messageLoop;
         _desktopPeek = desktopPeek;
         _appUpdater = appUpdater;
+        _hotKey = hotKey;
         _settings = settings;
         _exitAction = exitAction;
 
@@ -99,6 +102,7 @@ internal sealed class TrayIcon : IDisposable
         menu.AddItem(ID_STARTUP, "Start with Windows", ToggleStartup, _settings.StartWithWindows);
         menu.AddItem(ID_DOUBLECLICK, "Require Double-Click", ToggleDoubleClick, _settings.RequireDoubleClick);
         menu.AddItem(ID_TASKBAR_CLICK, "Peek on Taskbar Click", ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
+        menu.AddItem(ID_HOTKEY, $"Peek Hotkey ({HotKey.Describe(_settings.HotkeyModifiers, _settings.HotkeyVk)})", ToggleHotkey, _settings.HotkeyEnabled);
         menu.AddItem(ID_GAME_GUARD, "Pause While Gaming / Full-Screen", ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
         menu.AddSeparator();
         menu.AddItem(ID_MODE_NATIVE, "Show Desktop (Explorer)", () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
@@ -150,6 +154,31 @@ internal sealed class TrayIcon : IDisposable
     {
         _settings.PeekOnTaskbarClick = !_settings.PeekOnTaskbarClick;
         _desktopPeek.SetPeekOnTaskbarClick(_settings.PeekOnTaskbarClick);
+        _settings.Save();
+    }
+
+    private void ToggleHotkey()
+    {
+        _settings.HotkeyEnabled = !_settings.HotkeyEnabled;
+
+        if (_settings.HotkeyEnabled)
+        {
+            bool ok = _hotKey.Register(_settings.HotkeyModifiers, _settings.HotkeyVk);
+            if (!ok)
+            {
+                // Another app owns the combo; revert and notify the user.
+                _settings.HotkeyEnabled = false;
+                string combo = HotKey.Describe(_settings.HotkeyModifiers, _settings.HotkeyVk);
+                _trayIcon.ShowBalloon(
+                    "PeekDesktop Hotkey Unavailable",
+                    $"The {combo} shortcut is already in use by another application.");
+            }
+        }
+        else
+        {
+            _hotKey.Unregister();
+        }
+
         _settings.Save();
     }
 

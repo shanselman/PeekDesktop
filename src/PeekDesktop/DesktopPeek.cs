@@ -43,6 +43,12 @@ public sealed class DesktopPeek : IDisposable
     public bool IsPeeking => _isPeeking;
     public PeekMode PeekMode { get; set; }
 
+    /// <summary>
+    /// Toggles peek state as if the user had clicked the desktop wallpaper.
+    /// Honors the same enabled / transition / gaming guards as a real desktop click.
+    /// </summary>
+    public void TogglePeek() => OnDesktopClicked(this, EventArgs.Empty);
+
     public DesktopPeek(Settings settings)
     {
         PeekMode = NormalizePeekMode(settings.PeekMode);

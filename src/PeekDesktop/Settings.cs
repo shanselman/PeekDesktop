@@ -25,6 +25,13 @@ public sealed class Settings
     public bool PeekOnTaskbarClick { get; set; } = false;
     public PeekMode PeekMode { get; set; } = PeekMode.NativeShowDesktop;
 
+    // Global hotkey: defaults to Ctrl+Alt+P ('P' = 0x50), disabled by default
+    // to avoid claiming a combo the user may already be using. Turn it on via
+    // the tray menu.
+    public bool HotkeyEnabled { get; set; } = false;
+    public uint HotkeyModifiers { get; set; } = 0x0001 /* MOD_ALT */ | 0x0002 /* MOD_CONTROL */;
+    public uint HotkeyVk { get; set; } = 0x50; // 'P'
+
     public static Settings Load()
     {
         try
@@ -121,6 +128,21 @@ public sealed class Settings
                 reader.Read();
                 settings.PeekMode = (PeekMode)reader.GetInt32();
             }
+            else if (reader.ValueTextEquals("HotkeyEnabled"u8))
+            {
+                reader.Read();
+                settings.HotkeyEnabled = reader.GetBoolean();
+            }
+            else if (reader.ValueTextEquals("HotkeyModifiers"u8))
+            {
+                reader.Read();
+                settings.HotkeyModifiers = reader.GetUInt32();
+            }
+            else if (reader.ValueTextEquals("HotkeyVk"u8))
+            {
+                reader.Read();
+                settings.HotkeyVk = reader.GetUInt32();
+            }
             else
             {
                 reader.Skip();
@@ -142,6 +164,9 @@ public sealed class Settings
         writer.WriteBoolean("PauseWhileFullscreenAppActive"u8, PauseWhileFullscreenAppActive);
         writer.WriteBoolean("PeekOnTaskbarClick"u8, PeekOnTaskbarClick);
         writer.WriteNumber("PeekMode"u8, (int)PeekMode);
+        writer.WriteBoolean("HotkeyEnabled"u8, HotkeyEnabled);
+        writer.WriteNumber("HotkeyModifiers"u8, HotkeyModifiers);
+        writer.WriteNumber("HotkeyVk"u8, HotkeyVk);
         writer.WriteEndObject();
 
         writer.Flush();

@@ -71,6 +71,7 @@ When Windows is in dark mode, the tray menu also follows the system theme when s
 ## What's New
 
 - **Small Native AOT single-file builds** for both x64 and ARM64
+- **Global hotkey** — optional `Ctrl+Alt+P` shortcut toggles peek from anywhere (enable via tray menu)
 - **Peek on Taskbar Click** — optional trigger from empty taskbar space
 - **Dark tray menu support** — follows Windows dark mode when available
 - **Taskbar button Show Desktop** — bypasses keyboard remappers (PowerToys Keyboard Manager, etc.)
@@ -160,7 +161,7 @@ PRs welcome! Current status and next ideas:
 - [x] GitHub release-based update checks
 - [x] Works with PowerToys Keyboard Manager (keyboard remapping)
 - [ ] Smooth minimize/restore animations (slide/fade)
-- [ ] Hotkey support (e.g., `Ctrl+F12` to toggle peek)
+- [x] Hotkey support (e.g., `Ctrl+Alt+P` to toggle peek)
 - [ ] Per-monitor peek (only minimize windows on the clicked monitor)
 - [ ] Exclude specific apps from being minimized
 
