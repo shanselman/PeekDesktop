@@ -1074,4 +1074,16 @@ internal static class NativeMethods
 
         return (productVersion, fileVersion);
     }
+
+    // --- System language detection ---
+
+    [DllImport("kernel32.dll")]
+    private static extern ushort GetUserDefaultUILanguage();
+
+    public static bool IsSystemChinese()
+    {
+        ushort langId = GetUserDefaultUILanguage();
+        byte primaryLang = (byte)(langId & 0xFF);
+        return primaryLang == 0x04; // LANG_CHINESE
+    }
 }

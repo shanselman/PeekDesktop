@@ -50,8 +50,8 @@ internal sealed class TrayIcon : IDisposable
         _appUpdater.UpdateAvailable += (_, e) =>
         {
             _trayIcon.ShowBalloon(
-                "PeekDesktop Update Available",
-                $"Version {e.Version} is available. Click here to download and install.");
+                Lang.Balloon_UpdateTitle,
+                Lang.Balloon_UpdateBody(e.Version));
         };
 
         // Let the updater remove the tray icon before exiting during update
@@ -67,7 +67,7 @@ internal sealed class TrayIcon : IDisposable
     private void TryAddTrayIcon(bool scheduleRetryOnFailure)
     {
         IntPtr hIcon = Win32Icon.CreateTrayIcon();
-        if (_trayIcon.Add(hIcon, "PeekDesktop"))
+        if (_trayIcon.Add(hIcon, Lang.TrayTooltip_Initial))
             return;
 
         if (!scheduleRetryOnFailure)
@@ -101,22 +101,22 @@ internal sealed class TrayIcon : IDisposable
     {
         using var menu = new Win32Menu();
 
-        menu.AddItem(ID_ENABLED, "Enabled", ToggleEnabled, _settings.Enabled);
-        menu.AddItem(ID_STARTUP, "Start with Windows", ToggleStartup, _settings.StartWithWindows);
-        menu.AddItem(ID_DOUBLECLICK, "Require Double-Click", ToggleDoubleClick, _settings.RequireDoubleClick);
-        menu.AddItem(ID_DESKTOP_CLICK, "Peek on Desktop Click", ToggleDesktopClick, _settings.PeekOnDesktopClick);
-        menu.AddItem(ID_TASKBAR_CLICK, "Peek on Taskbar Click", ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
-        menu.AddItem(ID_RESTORE_ON_APP_OPEN, "Restore All Windows on App Switch", ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
-        menu.AddItem(ID_GAME_GUARD, "Pause While Gaming / Full-Screen", ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
+        menu.AddItem(ID_ENABLED, Lang.Tray_Enabled, ToggleEnabled, _settings.Enabled);
+        menu.AddItem(ID_STARTUP, Lang.Tray_StartWithWindows, ToggleStartup, _settings.StartWithWindows);
+        menu.AddItem(ID_DOUBLECLICK, Lang.Tray_RequireDoubleClick, ToggleDoubleClick, _settings.RequireDoubleClick);
+        menu.AddItem(ID_DESKTOP_CLICK, Lang.Tray_PeekOnDesktopClick, ToggleDesktopClick, _settings.PeekOnDesktopClick);
+        menu.AddItem(ID_TASKBAR_CLICK, Lang.Tray_PeekOnTaskbarClick, ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
+        menu.AddItem(ID_RESTORE_ON_APP_OPEN, Lang.Tray_RestoreOnAppSwitch, ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
+        menu.AddItem(ID_GAME_GUARD, Lang.Tray_PauseWhileGaming, ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
         menu.AddSeparator();
-        menu.AddItem(ID_MODE_NATIVE, "Show Desktop (Explorer)", () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
-        menu.AddItem(ID_MODE_FLYAWAY, "Fly Away (Experimental)", () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
+        menu.AddItem(ID_MODE_NATIVE, Lang.Tray_ShowDesktop, () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
+        menu.AddItem(ID_MODE_FLYAWAY, Lang.Tray_FlyAway, () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
         menu.AddSeparator();
-        menu.AddItem(ID_ABOUT, "About PeekDesktop", ShowAbout);
-        menu.AddItem(ID_UPDATES, "Check for Updates", CheckForUpdates);
-        menu.AddItem(ID_AUTO_UPDATES, "Auto-Check for Updates", ToggleAutoUpdates, _settings.AutoCheckForUpdates);
+        menu.AddItem(ID_ABOUT, Lang.Tray_About, ShowAbout);
+        menu.AddItem(ID_UPDATES, Lang.Tray_CheckForUpdates, CheckForUpdates);
+        menu.AddItem(ID_AUTO_UPDATES, Lang.Tray_AutoCheckForUpdates, ToggleAutoUpdates, _settings.AutoCheckForUpdates);
         menu.AddSeparator();
-        menu.AddItem(ID_EXIT, "Exit", DoExit);
+        menu.AddItem(ID_EXIT, Lang.Tray_Exit, DoExit);
 
         menu.Show(_messageLoop.Handle);
     }
@@ -180,24 +180,16 @@ internal sealed class TrayIcon : IDisposable
     {
         _settings.PeekMode = peekMode;
         _desktopPeek.SetPeekMode(peekMode);
-        _trayIcon.UpdateTooltip($"PeekDesktop - {GetPeekModeDisplayName(peekMode)}");
+        _trayIcon.UpdateTooltip(Lang.TrayTooltip_Mode(peekMode));
         _settings.Save();
     }
 
     private void ShowAbout()
     {
-        string version = GetDisplayVersion();
         NativeMethods.MessageBoxW(
             IntPtr.Zero,
-            $"PeekDesktop v{version}\n\n" +
-            "Click your desktop wallpaper to peek at your desktop,\n" +
-            "just like macOS Sonoma.\n\n" +
-            "Click any window or the taskbar to restore.\n" +
-            "Peek Style lets you switch between Explorer show desktop\n" +
-            "and fly-away mode.\n\n" +
-            "Updates come from GitHub Releases.\n\n" +
-            "github.com/shanselman/PeekDesktop",
-            "About PeekDesktop",
+            Lang.About_Body(GetDisplayVersion()),
+            Lang.About_Title,
             NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
     }
 
@@ -224,7 +216,7 @@ internal sealed class TrayIcon : IDisposable
         string? version = productVersion ?? fileVersion?.ToString();
 
         if (string.IsNullOrWhiteSpace(version))
-            return "unknown";
+            return Lang.Version_Unknown;
 
         int plusIndex = version.IndexOf('+');
         version = plusIndex >= 0 ? version[..plusIndex] : version;
@@ -234,22 +226,14 @@ internal sealed class TrayIcon : IDisposable
 
         return version switch
         {
-            "1.0.0.0" => "dev build",
-            "1.0.0" => "dev build",
+            "1.0.0.0" => Lang.Version_DevBuild,
+            "1.0.0" => Lang.Version_DevBuild,
             _ => version
         };
     }
 
     private static string GetPeekModeDisplayName(PeekMode peekMode)
-    {
-        return peekMode switch
-        {
-            PeekMode.Minimize => "Classic Minimize",
-            PeekMode.FlyAway => "Fly Away",
-            PeekMode.NativeShowDesktop => "Native Show Desktop",
-            _ => "Peek"
-        };
-    }
+        => Lang.PeekModeDisplayName(peekMode);
 
     public void Dispose()
     {

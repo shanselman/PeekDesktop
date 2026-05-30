@@ -158,7 +158,7 @@ internal sealed class VirtualDesktopService : IDisposable
             Guid desktopId = desktop.GetId();
             _peekDesktopId = desktopId;
             _peekDesktopCreated = true;
-            TrySetDesktopName(desktop, "PeekDesktop (Experimental)");
+            TrySetDesktopName(desktop, Lang.VirtualDesktop_Name);
             AppDiagnostics.Log($"Created virtual peek desktop {desktopId}");
             return desktop;
         }
