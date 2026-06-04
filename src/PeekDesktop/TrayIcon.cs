@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace PeekDesktop;
 
@@ -101,25 +102,51 @@ internal sealed class TrayIcon : IDisposable
     {
         using var menu = new Win32Menu();
 
-        menu.AddItem(ID_ENABLED, "Enabled", ToggleEnabled, _settings.Enabled);
-        menu.AddItem(ID_STARTUP, "Start with Windows", ToggleStartup, _settings.StartWithWindows);
-        menu.AddItem(ID_DOUBLECLICK, "Require Double-Click", ToggleDoubleClick, _settings.RequireDoubleClick);
-        menu.AddItem(ID_DESKTOP_CLICK, "Peek on Desktop Click", ToggleDesktopClick, _settings.PeekOnDesktopClick);
-        menu.AddItem(ID_TASKBAR_CLICK, "Peek on Taskbar Click", ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
-        menu.AddItem(ID_RESTORE_ON_APP_OPEN, "Restore All Windows on App Switch", ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
-        menu.AddItem(ID_GAME_GUARD, "Pause While Gaming / Full-Screen", ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
+        menu.AddItem(ID_ENABLED, GetLocalizedString("Enabled"), ToggleEnabled, _settings.Enabled);
+        menu.AddItem(ID_STARTUP, GetLocalizedString("Start with Windows"), ToggleStartup, _settings.StartWithWindows);
+        menu.AddItem(ID_DOUBLECLICK, GetLocalizedString("Require Double-Click"), ToggleDoubleClick, _settings.RequireDoubleClick);
+        menu.AddItem(ID_DESKTOP_CLICK, GetLocalizedString("Peek on Desktop Click"), ToggleDesktopClick, _settings.PeekOnDesktopClick);
+        menu.AddItem(ID_TASKBAR_CLICK, GetLocalizedString("Peek on Taskbar Click"), ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
+        menu.AddItem(ID_RESTORE_ON_APP_OPEN, GetLocalizedString("Restore All Windows on App Switch"), ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
+        menu.AddItem(ID_GAME_GUARD, GetLocalizedString("Pause While Gaming / Full-Screen"), ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
         menu.AddSeparator();
-        menu.AddItem(ID_MODE_NATIVE, "Show Desktop (Explorer)", () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
-        menu.AddItem(ID_MODE_FLYAWAY, "Fly Away (Experimental)", () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
+        menu.AddItem(ID_MODE_NATIVE, GetLocalizedString("Show Desktop (Explorer)"), () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
+        menu.AddItem(ID_MODE_FLYAWAY, GetLocalizedString("Fly Away (Experimental)"), () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
         menu.AddSeparator();
-        menu.AddItem(ID_ABOUT, "About PeekDesktop", ShowAbout);
-        menu.AddItem(ID_UPDATES, "Check for Updates", CheckForUpdates);
-        menu.AddItem(ID_AUTO_UPDATES, "Auto-Check for Updates", ToggleAutoUpdates, _settings.AutoCheckForUpdates);
+        menu.AddItem(ID_ABOUT, GetLocalizedString("About PeekDesktop"), ShowAbout);
+        menu.AddItem(ID_UPDATES, GetLocalizedString("Check for Updates"), CheckForUpdates);
+        menu.AddItem(ID_AUTO_UPDATES, GetLocalizedString("Auto-Check for Updates"), ToggleAutoUpdates, _settings.AutoCheckForUpdates);
         menu.AddSeparator();
-        menu.AddItem(ID_EXIT, "Exit", DoExit);
+        menu.AddItem(ID_EXIT, GetLocalizedString("Exit"), DoExit);
 
         menu.Show(_messageLoop.Handle);
     }
+
+   private static string GetLocalizedString(string key)
+    {
+        bool isChinese = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        if (!isChinese) return key;  
+
+        return key switch
+        {
+            "Enabled" => "启用",
+            "Start with Windows" => "开机自启",
+            "Require Double-Click" => "需要双击",
+            "Peek on Desktop Click" => "点击桌面时预览",
+            "Peek on Taskbar Click" => "点击任务栏时预览",
+            "Restore All Windows on App Switch" => "切换应用时恢复所有窗口",
+            "Pause While Gaming / Full-Screen" => "全屏游戏/应用时暂停",
+            "Show Desktop (Explorer)" => "显示桌面（资源管理器）",
+            "Fly Away (Experimental)" => "飞离效果（实验）",
+            "About PeekDesktop" => "关于 PeekDesktop",
+            "Check for Updates" => "检查更新",
+            "Auto-Check for Updates" => "自动检查更新",
+            "Exit" => "退出",
+            _ => key
+        };
+    }
+
+private static string GetEnglishString(string key) => key;
 
     private void ToggleEnabled()
     {
@@ -185,21 +212,35 @@ internal sealed class TrayIcon : IDisposable
     }
 
     private void ShowAbout()
+{
+    string version = GetDisplayVersion();
+    string message;
+    if (CultureInfo.CurrentUICulture.Name.StartsWith("zh"))
     {
-        string version = GetDisplayVersion();
-        NativeMethods.MessageBoxW(
-            IntPtr.Zero,
-            $"PeekDesktop v{version}\n\n" +
-            "Click your desktop wallpaper to peek at your desktop,\n" +
-            "just like macOS Sonoma.\n\n" +
-            "Click any window or the taskbar to restore.\n" +
-            "Peek Style lets you switch between Explorer show desktop\n" +
-            "and fly-away mode.\n\n" +
-            "Updates come from GitHub Releases.\n\n" +
-            "github.com/shanselman/PeekDesktop",
-            "About PeekDesktop",
-            NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
+        message = $"PeekDesktop v{version}\n\n" +
+                  "点击桌面壁纸即可预览桌面，\n" +
+                  "就像 macOS Sonoma 那样。\n\n" +
+                  "点击任意窗口或任务栏即可恢复。\n" +
+                  "预览风格可在资源管理器显示桌面\n" +
+                  "和飞离效果之间切换。\n\n" +
+                  "更新来自 GitHub Releases。\n\n" +
+                  "github.com/shanselman/PeekDesktop";
     }
+    else
+    {
+        message = $"PeekDesktop v{version}\n\n" +
+                  "Click your desktop wallpaper to peek at your desktop,\n" +
+                  "just like macOS Sonoma.\n\n" +
+                  "Click any window or the taskbar to restore.\n" +
+                  "Peek Style lets you switch between Explorer show desktop\n" +
+                  "and fly-away mode.\n\n" +
+                  "Updates come from GitHub Releases.\n\n" +
+                  "github.com/shanselman/PeekDesktop";
+    }
+    NativeMethods.MessageBoxW(IntPtr.Zero, message, 
+        GetLocalizedString("About PeekDesktop"), 
+        NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
+}
 
     private async void CheckForUpdates()
     {
