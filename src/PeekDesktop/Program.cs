@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using PeekDesktop.Resources;
 
 namespace PeekDesktop;
 
@@ -67,7 +68,7 @@ public static class Program
                 }
                 catch (Exception ex)
                 {
-                    HandleFatalStartupError("Deferred initialization failed", ex);
+                    HandleFatalStartupError(Strings.StartupDeferredInitializationFailed, ex);
                     messageLoop.Quit();
                 }
             });
@@ -76,7 +77,7 @@ public static class Program
         }
         catch (Exception ex)
         {
-            HandleFatalStartupError("Program startup failed", ex);
+            HandleFatalStartupError(Strings.StartupProgramFailed, ex);
         }
         finally
         {
@@ -165,8 +166,8 @@ public static class Program
         AppDiagnostics.Log($"{context}: {ex}");
         NativeMethods.MessageBoxW(
             IntPtr.Zero,
-            $"{context}\n\n{ex.Message}",
-            "PeekDesktop failed to start",
+            Strings.StartupErrorMessage(context, ex.Message),
+            Strings.StartupErrorCaption,
             NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
     }
 }

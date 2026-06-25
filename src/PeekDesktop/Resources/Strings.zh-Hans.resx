@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AboutCaption" xml:space="preserve">
+    <value>关于 PeekDesktop</value>
+  </data>
+  <data name="AboutMessage" xml:space="preserve">
+    <value>PeekDesktop v{0}
+
+点击桌面壁纸即可预览桌面，
+就像 macOS Sonoma 一样。
+
+点击任意窗口或任务栏即可恢复。
+“预览样式”可在资源管理器显示桌面
+和飞离模式之间切换。
+
+更新来自 GitHub Releases。
+
+github.com/shanselman/PeekDesktop</value>
+  </data>
+  <data name="AutoCheckForUpdates" xml:space="preserve">
+    <value>自动检查更新</value>
+  </data>
+  <data name="CheckForUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="ClassicMinimize" xml:space="preserve">
+    <value>经典最小化</value>
+  </data>
+  <data name="DevBuild" xml:space="preserve">
+    <value>开发版本</value>
+  </data>
+  <data name="Enabled" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="FlyAway" xml:space="preserve">
+    <value>飞离</value>
+  </data>
+  <data name="FlyAwayExperimental" xml:space="preserve">
+    <value>飞离（实验）</value>
+  </data>
+  <data name="NativeShowDesktop" xml:space="preserve">
+    <value>原生显示桌面</value>
+  </data>
+  <data name="PauseWhileGamingFullscreen" xml:space="preserve">
+    <value>游戏/全屏时暂停</value>
+  </data>
+  <data name="Peek" xml:space="preserve">
+    <value>预览</value>
+  </data>
+  <data name="PeekOnDesktopClick" xml:space="preserve">
+    <value>点击桌面时预览</value>
+  </data>
+  <data name="PeekOnTaskbarClick" xml:space="preserve">
+    <value>点击任务栏时预览</value>
+  </data>
+  <data name="RequireDoubleClick" xml:space="preserve">
+    <value>需要双击</value>
+  </data>
+  <data name="RestoreAllWindowsOnAppSwitch" xml:space="preserve">
+    <value>切换应用时恢复所有窗口</value>
+  </data>
+  <data name="ShowDesktopExplorer" xml:space="preserve">
+    <value>显示桌面（资源管理器）</value>
+  </data>
+  <data name="StartWithWindows" xml:space="preserve">
+    <value>随 Windows 启动</value>
+  </data>
+  <data name="StartupDeferredInitializationFailed" xml:space="preserve">
+    <value>延迟初始化失败</value>
+  </data>
+  <data name="StartupErrorCaption" xml:space="preserve">
+    <value>PeekDesktop 启动失败</value>
+  </data>
+  <data name="StartupErrorMessage" xml:space="preserve">
+    <value>{0}
+
+{1}</value>
+  </data>
+  <data name="StartupProgramFailed" xml:space="preserve">
+    <value>程序启动失败</value>
+  </data>
+  <data name="Tooltip" xml:space="preserve">
+    <value>PeekDesktop - {0}</value>
+  </data>
+  <data name="UnknownVersion" xml:space="preserve">
+    <value>未知</value>
+  </data>
+  <data name="UpdateAlreadyCheckingMessage" xml:space="preserve">
+    <value>PeekDesktop 正在检查更新。</value>
+  </data>
+  <data name="UpdateAlreadyLatestMessage" xml:space="preserve">
+    <value>你已经在使用 PeekDesktop 的最新版本（{0}）。</value>
+  </data>
+  <data name="UpdateAvailableBalloonText" xml:space="preserve">
+    <value>版本 {0} 可用。点击此处下载并安装。</value>
+  </data>
+  <data name="UpdateAvailableBalloonTitle" xml:space="preserve">
+    <value>PeekDesktop 有可用更新</value>
+  </data>
+  <data name="UpdateAvailableCaption" xml:space="preserve">
+    <value>有可用更新</value>
+  </data>
+  <data name="UpdateAvailablePromptMessage" xml:space="preserve">
+    <value>PeekDesktop {0} 可用。
+
+现在下载并安装吗？PeekDesktop 将自动重启。</value>
+  </data>
+  <data name="UpdateCheckErrorCaption" xml:space="preserve">
+    <value>更新错误</value>
+  </data>
+  <data name="UpdateCheckFailedMessage" xml:space="preserve">
+    <value>PeekDesktop 无法检查更新。
+
+{0}</value>
+  </data>
+  <data name="UpdateInstalledCaption" xml:space="preserve">
+    <value>更新已安装</value>
+  </data>
+  <data name="UpdateInstalledRestartFailedMessage" xml:space="preserve">
+    <value>更新已安装，但 PeekDesktop 无法自动重启。
+
+请手动启动 PeekDesktop。</value>
+  </data>
+  <data name="UpdateInstallFailedMessage" xml:space="preserve">
+    <value>PeekDesktop 无法安装更新。
+
+{0}</value>
+  </data>
+  <data name="UpdateMenuCaption" xml:space="preserve">
+    <value>PeekDesktop 更新</value>
+  </data>
+  <data name="UpdateNewVersion" xml:space="preserve">
+    <value>新版本</value>
+  </data>
+</root>
