@@ -100,6 +100,11 @@ internal static class NativeMethods
         int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    public delegate bool MonitorEnumProc(
+        IntPtr hMonitor,
+        IntPtr hdcMonitor,
+        ref RECT monitorRect,
+        IntPtr data);
 
     #endregion
 
@@ -301,6 +306,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumDisplayMonitors(
+        IntPtr hdc,
+        IntPtr clipRect,
+        MonitorEnumProc callback,
+        IntPtr data);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
