@@ -39,9 +39,13 @@ jobs:
       run: |
         $programSource = Get-Content "src/PeekDesktop/Program.cs" -Raw
         if ($programSource.Contains("--selftest-localization")) {
-          & "src/PeekDesktop/bin/Release/net10.0-windows/win-x64/publish/PeekDesktop.exe" --selftest-localization
-          if ($LASTEXITCODE -ne 0) {
-            throw "Published localization self-test failed with exit code $LASTEXITCODE."
+          $process = Start-Process `
+            -FilePath "src/PeekDesktop/bin/Release/net10.0-windows/win-x64/publish/PeekDesktop.exe" `
+            -ArgumentList "--selftest-localization" `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Published localization self-test failed with exit code $($process.ExitCode)."
           }
         } else {
           Write-Host "Published localization self-test is not present on this branch."
