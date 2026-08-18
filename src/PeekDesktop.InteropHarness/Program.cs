@@ -28,6 +28,9 @@ internal static class Program
         RunTest("Notification state stress", options, failures, NotificationStateStress);
         RunTest("Malformed input contracts", options, failures, MalformedInputContracts);
         RunTest("Mouse click routing logic", options, failures, MouseClickRoutingLogic);
+        RunTest("Fly Away virtual-screen geometry", options, failures, FlyAwayVirtualScreenGeometry);
+        RunTest("Fly Away geometry fuzz", options, failures, FlyAwayGeometryFuzz);
+        RunTest("Fly Away geometry exhaustive", options, failures, FlyAwayGeometryExhaustive);
         RunTest($"Leak probe ({options.Iterations:N0} iterations)", options, failures, () => LeakProbe(options));
 
         // Auto-updater tests
@@ -349,6 +352,328 @@ internal static class Program
             if (description.Length > 4096 || hierarchy.Length > 16384)
                 throw new InvalidOperationException("Window diagnostics returned unexpectedly large payloads.");
         }
+    }
+
+    private static void FlyAwayVirtualScreenGeometry()
+    {
+        NativeMethods.RECT[] rectangularLayout =
+        [
+            new() { Left = -1920, Top = 0, Right = 0, Bottom = 1080 },
+            new() { Left = 0, Top = 0, Right = 1920, Bottom = 1080 },
+            new() { Left = 1920, Top = 0, Right = 3840, Bottom = 1080 }
+        ];
+
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = -900, Top = 300, Right = -300, Bottom = 900 },
+            rectangularLayout,
+            expectedDirection: "down");
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = 3400, Top = 100, Right = 3800, Bottom = 800 },
+            rectangularLayout,
+            expectedDirection: "right");
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = -2500, Top = -400, Right = 2500, Bottom = 1400 },
+            rectangularLayout,
+            expectedDirection: "up");
+
+        NativeMethods.RECT[] staggeredLayout =
+        [
+            new() { Left = 0, Top = 0, Right = 1920, Bottom = 1080 },
+            new() { Left = 1920, Top = 540, Right = 3840, Bottom = 1620 }
+        ];
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = 2400, Top = 715, Right = 2600, Bottom = 915 },
+            staggeredLayout,
+            expectedDirection: "up");
+
+        NativeMethods.RECT[] staggeredRowWithGap =
+        [
+            new() { Left = 0, Top = 0, Right = 1920, Bottom = 1080 },
+            new() { Left = 1920, Top = 540, Right = 3840, Bottom = 1620 },
+            new() { Left = 3840, Top = 0, Right = 5760, Bottom = 1080 }
+        ];
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = 1700, Top = 100, Right = 1900, Bottom = 400 },
+            staggeredRowWithGap,
+            expectedDirection: "right");
+
+        NativeMethods.RECT[] portraitLayout =
+        [
+            new() { Left = -1080, Top = -1920, Right = 0, Bottom = 0 }
+        ];
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = -1050, Top = -1200, Right = -750, Bottom = -500 },
+            portraitLayout,
+            expectedDirection: "left");
+
+        NativeMethods.RECT[] lShapedLayout =
+        [
+            new() { Left = 0, Top = 0, Right = 1920, Bottom = 1080 },
+            new() { Left = 1920, Top = 1080, Right = 3840, Bottom = 2160 }
+        ];
+        AssertFlyAwayTarget(
+            new NativeMethods.RECT { Left = 1600, Top = 1000, Right = 1700, Bottom = 1070 },
+            lShapedLayout,
+            expectedDirection: "down");
+
+        var original = new NativeMethods.RECT { Left = 10, Top = 20, Right = 110, Bottom = 120 };
+        NativeMethods.RECT unchanged = WindowTracker.ComputeFlyAwayTarget(original, []);
+        if (unchanged.Left != original.Left
+            || unchanged.Top != original.Top
+            || unchanged.Right != original.Right
+            || unchanged.Bottom != original.Bottom)
+        {
+            throw new InvalidOperationException("Invalid virtual-screen bounds changed the target.");
+        }
+    }
+
+    private static void AssertFlyAwayTarget(
+        NativeMethods.RECT start,
+        IReadOnlyList<NativeMethods.RECT> monitorBounds,
+        string expectedDirection)
+    {
+        NativeMethods.RECT target = WindowTracker.ComputeFlyAwayTarget(start, monitorBounds);
+        if (!WindowTracker.IsOutsideAllMonitors(target, monitorBounds))
+            throw new InvalidOperationException("Fly Away target did not exit the complete virtual desktop.");
+
+        if ((target.Right - target.Left) != (start.Right - start.Left)
+            || (target.Bottom - target.Top) != (start.Bottom - start.Top))
+        {
+            throw new InvalidOperationException("Fly Away target changed the window size.");
+        }
+
+        string actualDirection = target.Left < start.Left
+            ? "left"
+            : target.Left > start.Left
+                ? "right"
+                : target.Top < start.Top
+                    ? "up"
+                    : "down";
+        if (!string.Equals(actualDirection, expectedDirection, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Fly Away chose {actualDirection} instead of the nearest {expectedDirection} exit.");
+        }
+
+        AssertShortestExit(start, target, monitorBounds);
+    }
+
+    private static void FlyAwayGeometryFuzz()
+    {
+        var random = new Random(0x5045454B);
+        for (int iteration = 0; iteration < 2_000; iteration++)
+        {
+            int monitorCount = random.Next(1, 17);
+            var monitors = new List<NativeMethods.RECT>(monitorCount);
+            for (int i = 0; i < monitorCount; i++)
+            {
+                int left = random.Next(-30_000, 30_001);
+                int top = random.Next(-30_000, 30_001);
+                int width = random.Next(320, 7_681);
+                int height = random.Next(240, 4_321);
+                monitors.Add(new NativeMethods.RECT
+                {
+                    Left = left,
+                    Top = top,
+                    Right = left + width,
+                    Bottom = top + height
+                });
+            }
+
+            NativeMethods.RECT anchor = monitors[random.Next(monitors.Count)];
+            int windowWidth = random.Next(1, 20_001);
+            int windowHeight = random.Next(1, 12_001);
+            int windowLeft = random.Next(anchor.Left - windowWidth + 1, anchor.Right);
+            int windowTop = random.Next(anchor.Top - windowHeight + 1, anchor.Bottom);
+            var start = new NativeMethods.RECT
+            {
+                Left = windowLeft,
+                Top = windowTop,
+                Right = windowLeft + windowWidth,
+                Bottom = windowTop + windowHeight
+            };
+
+            NativeMethods.RECT target = WindowTracker.ComputeFlyAwayTarget(start, monitors);
+            if (target.Left == start.Left && target.Top == start.Top)
+                throw new InvalidOperationException($"Geometry fuzz case {iteration} did not move an on-monitor window.");
+
+            if (target.Left != start.Left && target.Top != start.Top)
+                throw new InvalidOperationException($"Geometry fuzz case {iteration} moved on both axes.");
+
+            if ((target.Right - target.Left) != windowWidth
+                || (target.Bottom - target.Top) != windowHeight)
+            {
+                throw new InvalidOperationException($"Geometry fuzz case {iteration} changed the window size.");
+            }
+
+            foreach (NativeMethods.RECT monitor in monitors)
+            {
+                if (RectanglesIntersect(target, monitor))
+                {
+                    throw new InvalidOperationException(
+                        $"Geometry fuzz case {iteration} still intersected a monitor.");
+                }
+            }
+
+        }
+    }
+
+    private static void FlyAwayGeometryExhaustive()
+    {
+        var random = new Random(0x4D4F4E49);
+        for (int iteration = 0; iteration < 300; iteration++)
+        {
+            int monitorCount = random.Next(1, 7);
+            var monitors = new List<NativeMethods.RECT>(monitorCount);
+            for (int i = 0; i < monitorCount; i++)
+            {
+                int monitorLeft = random.Next(-400, 401);
+                int monitorTop = random.Next(-400, 401);
+                int width = random.Next(40, 501);
+                int height = random.Next(40, 501);
+                monitors.Add(new NativeMethods.RECT
+                {
+                    Left = monitorLeft,
+                    Top = monitorTop,
+                    Right = monitorLeft + width,
+                    Bottom = monitorTop + height
+                });
+            }
+
+            NativeMethods.RECT anchor = monitors[random.Next(monitors.Count)];
+            int windowWidth = random.Next(1, 601);
+            int windowHeight = random.Next(1, 601);
+            int windowLeft = random.Next(anchor.Left - windowWidth + 1, anchor.Right);
+            int windowTop = random.Next(anchor.Top - windowHeight + 1, anchor.Bottom);
+            var start = new NativeMethods.RECT
+            {
+                Left = windowLeft,
+                Top = windowTop,
+                Right = windowLeft + windowWidth,
+                Bottom = windowTop + windowHeight
+            };
+
+            NativeMethods.RECT target = WindowTracker.ComputeFlyAwayTarget(start, monitors);
+            AssertShortestExit(start, target, monitors);
+        }
+    }
+
+    private static void AssertShortestExit(
+        NativeMethods.RECT start,
+        NativeMethods.RECT actual,
+        IReadOnlyList<NativeMethods.RECT> monitors)
+    {
+        long expectedDistance = FindShortestExitDistanceByScan(start, monitors);
+        if (expectedDistance == long.MaxValue)
+            throw new InvalidOperationException("Independent scan found no safe Fly Away exit.");
+
+        long actualDistance = Math.Abs((long)actual.Left - start.Left)
+            + Math.Abs((long)actual.Top - start.Top);
+        if (actualDistance != expectedDistance)
+        {
+            throw new InvalidOperationException(
+                $"Fly Away travelled {actualDistance} pixels; shortest safe exit is {expectedDistance}.");
+        }
+    }
+
+    private static long FindShortestExitDistanceByScan(
+        NativeMethods.RECT start,
+        IReadOnlyList<NativeMethods.RECT> monitors)
+    {
+        int minLeft = int.MaxValue;
+        int minTop = int.MaxValue;
+        int maxRight = int.MinValue;
+        int maxBottom = int.MinValue;
+        foreach (NativeMethods.RECT monitor in monitors)
+        {
+            minLeft = Math.Min(minLeft, monitor.Left);
+            minTop = Math.Min(minTop, monitor.Top);
+            maxRight = Math.Max(maxRight, monitor.Right);
+            maxBottom = Math.Max(maxBottom, monitor.Bottom);
+        }
+
+        long maximumDistance = Math.Max(
+            Math.Max(
+                (long)start.Right - minLeft,
+                (long)maxRight - start.Left),
+            Math.Max(
+                (long)start.Bottom - minTop,
+                (long)maxBottom - start.Top))
+            + WindowTracker.OffscreenMargin
+            + 1;
+
+        for (int pass = 0; pass < 2; pass++)
+        {
+            int clearance = pass == 0 ? WindowTracker.OffscreenMargin : 0;
+            for (long distance = 0; distance <= maximumDistance; distance++)
+            {
+                NativeMethods.RECT[] candidates =
+                [
+                    new NativeMethods.RECT
+                    {
+                        Left = (int)(start.Left - distance),
+                        Top = start.Top,
+                        Right = (int)(start.Right - distance),
+                        Bottom = start.Bottom
+                    },
+                    new NativeMethods.RECT
+                    {
+                        Left = (int)(start.Left + distance),
+                        Top = start.Top,
+                        Right = (int)(start.Right + distance),
+                        Bottom = start.Bottom
+                    },
+                    new NativeMethods.RECT
+                    {
+                        Left = start.Left,
+                        Top = (int)(start.Top - distance),
+                        Right = start.Right,
+                        Bottom = (int)(start.Bottom - distance)
+                    },
+                    new NativeMethods.RECT
+                    {
+                        Left = start.Left,
+                        Top = (int)(start.Top + distance),
+                        Right = start.Right,
+                        Bottom = (int)(start.Bottom + distance)
+                    }
+                ];
+
+                foreach (NativeMethods.RECT candidate in candidates)
+                {
+                    if (IsClearOfAllMonitors(candidate, monitors, clearance))
+                        return distance;
+                }
+            }
+        }
+
+        return long.MaxValue;
+    }
+
+    private static bool IsClearOfAllMonitors(
+        NativeMethods.RECT candidate,
+        IReadOnlyList<NativeMethods.RECT> monitors,
+        int clearance)
+    {
+        foreach (NativeMethods.RECT monitor in monitors)
+        {
+            bool horizontalOverlap = (long)candidate.Left - clearance < monitor.Right
+                && (long)candidate.Right + clearance > monitor.Left;
+            bool verticalOverlap = (long)candidate.Top - clearance < monitor.Bottom
+                && (long)candidate.Bottom + clearance > monitor.Top;
+            if (horizontalOverlap && verticalOverlap)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool RectanglesIntersect(NativeMethods.RECT first, NativeMethods.RECT second)
+    {
+        return first.Left < second.Right
+            && first.Right > second.Left
+            && first.Top < second.Bottom
+            && first.Bottom > second.Top;
     }
 
     private static void PointAndRoleFuzz()

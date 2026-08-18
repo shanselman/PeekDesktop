@@ -100,6 +100,11 @@ internal static class NativeMethods
         int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    public delegate bool MonitorEnumProc(
+        IntPtr hMonitor,
+        IntPtr hdcMonitor,
+        ref RECT monitorRect,
+        IntPtr data);
 
     #endregion
 
@@ -289,10 +294,6 @@ internal static class NativeMethods
     public const int SM_CYDOUBLECLK = 37;
     public const int SM_CXDRAG = 68;
     public const int SM_CYDRAG = 69;
-    public const int SM_XVIRTUALSCREEN = 76;
-    public const int SM_YVIRTUALSCREEN = 77;
-    public const int SM_CXVIRTUALSCREEN = 78;
-    public const int SM_CYVIRTUALSCREEN = 79;
     public const uint CWP_SKIPINVISIBLE = 0x0001;
     public const uint CWP_SKIPDISABLED = 0x0002;
     public const uint CWP_SKIPTRANSPARENT = 0x0004;
@@ -305,6 +306,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumDisplayMonitors(
+        IntPtr hdc,
+        IntPtr clipRect,
+        MonitorEnumProc callback,
+        IntPtr data);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

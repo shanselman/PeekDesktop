@@ -14,7 +14,7 @@ public sealed class WindowTracker
 {
     private const int AnimationSteps = 12;
     private const int AnimationDurationMs = 160;
-    private const int OffscreenMargin = 64;
+    internal const int OffscreenMargin = 64;
 
     private readonly List<WindowInfo> _savedWindows = new();
 
@@ -103,6 +103,12 @@ public sealed class WindowTracker
     {
         var stopwatch = Stopwatch.StartNew();
         var animationWindows = new List<AnimatedWindow>(_savedWindows.Count);
+        IReadOnlyList<NativeMethods.RECT> monitorBounds = GetMonitorBounds();
+        if (monitorBounds.Count == 0)
+        {
+            AppDiagnostics.Log("Fly Away skipped because monitor geometry was unavailable");
+            return;
+        }
 
         foreach (var window in _savedWindows)
         {
@@ -121,7 +127,7 @@ public sealed class WindowTracker
             NativeMethods.ShowWindow(window.Handle, NativeMethods.SW_SHOWNOACTIVATE);
 
             NativeMethods.RECT startBounds = GetCurrentBounds(window);
-            NativeMethods.RECT targetBounds = ComputeFlyAwayTarget(startBounds);
+            NativeMethods.RECT targetBounds = ComputeFlyAwayTarget(startBounds, monitorBounds);
             animationWindows.Add(new AnimatedWindow(window.Handle, startBounds, targetBounds));
         }
 
@@ -249,55 +255,199 @@ public sealed class WindowTracker
         return window.Bounds;
     }
 
-    private static NativeMethods.RECT ComputeFlyAwayTarget(NativeMethods.RECT startBounds)
+    internal static NativeMethods.RECT ComputeFlyAwayTarget(
+        NativeMethods.RECT startBounds,
+        IReadOnlyList<NativeMethods.RECT> monitorBounds)
     {
-        var monitorInfo = new NativeMethods.MONITORINFO { cbSize = (uint)Marshal.SizeOf<NativeMethods.MONITORINFO>() };
-        IntPtr hMonitor = NativeMethods.MonitorFromRect(ref startBounds, NativeMethods.MONITOR_DEFAULTTONEAREST);
-        NativeMethods.GetMonitorInfoW(hMonitor, ref monitorInfo);
-        NativeMethods.RECT screenBounds = monitorInfo.rcWork;
-        NativeMethods.RECT virtualScreenBounds = GetVirtualScreenBounds();
+        if (monitorBounds.Count == 0)
+            return startBounds;
 
-        int width = Math.Max(1, startBounds.Right - startBounds.Left);
-        int height = Math.Max(1, startBounds.Bottom - startBounds.Top);
-        int centerX = startBounds.Left + (width / 2);
-        int centerY = startBounds.Top + (height / 2);
+        int width = startBounds.Right - startBounds.Left;
+        int height = startBounds.Bottom - startBounds.Top;
+        if (width <= 0 || height <= 0 || IsOutsideAllMonitors(startBounds, monitorBounds))
+            return startBounds;
 
-        int screenWidth = screenBounds.Right - screenBounds.Left;
-        int screenHeight = screenBounds.Bottom - screenBounds.Top;
-
-        bool moveLeft = centerX < screenBounds.Left + (screenWidth / 2);
-        bool moveUp = centerY < screenBounds.Top + (screenHeight / 2);
-
-        int targetLeft = moveLeft
-            ? virtualScreenBounds.Left - width - OffscreenMargin
-            : virtualScreenBounds.Right + OffscreenMargin;
-
-        int targetTop = moveUp
-            ? virtualScreenBounds.Top - height - OffscreenMargin
-            : virtualScreenBounds.Bottom + OffscreenMargin;
-
-        return new NativeMethods.RECT
+        for (int pass = 0; pass < 2; pass++)
         {
-            Left = targetLeft,
-            Top = targetTop,
-            Right = targetLeft + width,
-            Bottom = targetTop + height
-        };
+            int clearance = pass == 0 ? OffscreenMargin : 0;
+            NativeMethods.RECT bestTarget = startBounds;
+            long bestDistance = long.MaxValue;
+
+            foreach (NativeMethods.RECT monitor in monitorBounds)
+            {
+                if (RangesOverlap(
+                        (long)startBounds.Top - clearance,
+                        (long)startBounds.Bottom + clearance,
+                        monitor.Top,
+                        monitor.Bottom))
+                {
+                    int leftRight = ClampCoordinate((long)monitor.Left - clearance);
+                    ConsiderTarget(
+                        new NativeMethods.RECT
+                        {
+                            Left = ClampCoordinate((long)leftRight - width),
+                            Top = startBounds.Top,
+                            Right = leftRight,
+                            Bottom = startBounds.Bottom
+                        },
+                        startBounds,
+                        monitorBounds,
+                        clearance,
+                        ref bestTarget,
+                        ref bestDistance);
+
+                    int rightLeft = ClampCoordinate((long)monitor.Right + clearance);
+                    ConsiderTarget(
+                        new NativeMethods.RECT
+                        {
+                            Left = rightLeft,
+                            Top = startBounds.Top,
+                            Right = ClampCoordinate((long)rightLeft + width),
+                            Bottom = startBounds.Bottom
+                        },
+                        startBounds,
+                        monitorBounds,
+                        clearance,
+                        ref bestTarget,
+                        ref bestDistance);
+                }
+
+                if (RangesOverlap(
+                        (long)startBounds.Left - clearance,
+                        (long)startBounds.Right + clearance,
+                        monitor.Left,
+                        monitor.Right))
+                {
+                    int topBottom = ClampCoordinate((long)monitor.Top - clearance);
+                    ConsiderTarget(
+                        new NativeMethods.RECT
+                        {
+                            Left = startBounds.Left,
+                            Top = ClampCoordinate((long)topBottom - height),
+                            Right = startBounds.Right,
+                            Bottom = topBottom
+                        },
+                        startBounds,
+                        monitorBounds,
+                        clearance,
+                        ref bestTarget,
+                        ref bestDistance);
+
+                    int bottomTop = ClampCoordinate((long)monitor.Bottom + clearance);
+                    ConsiderTarget(
+                        new NativeMethods.RECT
+                        {
+                            Left = startBounds.Left,
+                            Top = bottomTop,
+                            Right = startBounds.Right,
+                            Bottom = ClampCoordinate((long)bottomTop + height)
+                        },
+                        startBounds,
+                        monitorBounds,
+                        clearance,
+                        ref bestTarget,
+                        ref bestDistance);
+                }
+            }
+
+            if (bestDistance != long.MaxValue)
+                return bestTarget;
+        }
+
+        return startBounds;
     }
 
-    private static NativeMethods.RECT GetVirtualScreenBounds()
+    private static IReadOnlyList<NativeMethods.RECT> GetMonitorBounds()
     {
-        int left = NativeMethods.GetSystemMetrics(NativeMethods.SM_XVIRTUALSCREEN);
-        int top = NativeMethods.GetSystemMetrics(NativeMethods.SM_YVIRTUALSCREEN);
-        int width = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SM_CXVIRTUALSCREEN));
-        int height = Math.Max(1, NativeMethods.GetSystemMetrics(NativeMethods.SM_CYVIRTUALSCREEN));
-        return new NativeMethods.RECT
+        var monitorBounds = new List<NativeMethods.RECT>();
+        bool enumerated = NativeMethods.EnumDisplayMonitors(
+            IntPtr.Zero,
+            IntPtr.Zero,
+            (IntPtr _, IntPtr _, ref NativeMethods.RECT monitorRect, IntPtr _) =>
+            {
+                if (monitorRect.Right > monitorRect.Left && monitorRect.Bottom > monitorRect.Top)
+                    monitorBounds.Add(monitorRect);
+                return true;
+            },
+            IntPtr.Zero);
+
+        if (!enumerated)
         {
-            Left = left,
-            Top = top,
-            Right = left + width,
-            Bottom = top + height
-        };
+            AppDiagnostics.Log("EnumDisplayMonitors failed while computing Fly Away targets");
+            monitorBounds.Clear();
+        }
+
+        return monitorBounds;
+    }
+
+    private static void ConsiderTarget(
+        NativeMethods.RECT candidate,
+        NativeMethods.RECT startBounds,
+        IReadOnlyList<NativeMethods.RECT> monitorBounds,
+        int clearance,
+        ref NativeMethods.RECT bestTarget,
+        ref long bestDistance)
+    {
+        long sourceWidth = (long)startBounds.Right - startBounds.Left;
+        long sourceHeight = (long)startBounds.Bottom - startBounds.Top;
+        if ((long)candidate.Right - candidate.Left != sourceWidth
+            || (long)candidate.Bottom - candidate.Top != sourceHeight)
+        {
+            return;
+        }
+
+        if (!IsClearOfAllMonitors(candidate, monitorBounds, clearance))
+            return;
+
+        long distance = Math.Abs((long)candidate.Left - startBounds.Left)
+            + Math.Abs((long)candidate.Top - startBounds.Top);
+        if (distance < bestDistance)
+        {
+            bestTarget = candidate;
+            bestDistance = distance;
+        }
+    }
+
+    internal static bool IsOutsideAllMonitors(
+        NativeMethods.RECT bounds,
+        IReadOnlyList<NativeMethods.RECT> monitorBounds)
+    {
+        return IsClearOfAllMonitors(bounds, monitorBounds, 0);
+    }
+
+    internal static bool IsClearOfAllMonitors(
+        NativeMethods.RECT bounds,
+        IReadOnlyList<NativeMethods.RECT> monitorBounds,
+        int clearance)
+    {
+        foreach (NativeMethods.RECT monitor in monitorBounds)
+        {
+            if (RangesOverlap(
+                    (long)bounds.Left - clearance,
+                    (long)bounds.Right + clearance,
+                    monitor.Left,
+                    monitor.Right)
+                && RangesOverlap(
+                    (long)bounds.Top - clearance,
+                    (long)bounds.Bottom + clearance,
+                    monitor.Top,
+                    monitor.Bottom))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool RangesOverlap(long firstStart, long firstEnd, long secondStart, long secondEnd)
+    {
+        return firstStart < secondEnd && firstEnd > secondStart;
+    }
+
+    private static int ClampCoordinate(long value)
+    {
+        return (int)Math.Clamp(value, int.MinValue, int.MaxValue);
     }
 
     private static void AnimateWindows(IReadOnlyList<AnimatedWindow> windows)
@@ -358,7 +508,7 @@ public sealed class WindowTracker
 
     private static int Lerp(int from, int to, double t)
     {
-        return (int)Math.Round(from + ((to - from) * t));
+        return (int)Math.Round(from + (((long)to - from) * t));
     }
 
     private record WindowInfo(IntPtr Handle, NativeMethods.WINDOWPLACEMENT Placement, NativeMethods.RECT Bounds);
