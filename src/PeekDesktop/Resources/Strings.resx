@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AboutCaption" xml:space="preserve">
+    <value>About PeekDesktop</value>
+  </data>
+  <data name="AboutMessage" xml:space="preserve">
+    <value>PeekDesktop v{0}
+
+Click your desktop wallpaper to peek at your desktop,
+just like macOS Sonoma.
+
+Click any window or the taskbar to restore.
+Peek Style lets you switch between Explorer show desktop
+and fly-away mode.
+
+Updates come from GitHub Releases.
+
+github.com/shanselman/PeekDesktop</value>
+  </data>
+  <data name="AutoCheckForUpdates" xml:space="preserve">
+    <value>Auto-Check for Updates</value>
+  </data>
+  <data name="CheckForUpdates" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="ClassicMinimize" xml:space="preserve">
+    <value>Classic Minimize</value>
+  </data>
+  <data name="DevBuild" xml:space="preserve">
+    <value>dev build</value>
+  </data>
+  <data name="Enabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="FlyAway" xml:space="preserve">
+    <value>Fly Away</value>
+  </data>
+  <data name="FlyAwayExperimental" xml:space="preserve">
+    <value>Fly Away (Experimental)</value>
+  </data>
+  <data name="NativeShowDesktop" xml:space="preserve">
+    <value>Native Show Desktop</value>
+  </data>
+  <data name="PauseWhileGamingFullscreen" xml:space="preserve">
+    <value>Pause While Gaming / Full-Screen</value>
+  </data>
+  <data name="Peek" xml:space="preserve">
+    <value>Peek</value>
+  </data>
+  <data name="PeekOnDesktopClick" xml:space="preserve">
+    <value>Peek on Desktop Click</value>
+  </data>
+  <data name="PeekOnTaskbarClick" xml:space="preserve">
+    <value>Peek on Taskbar Click</value>
+  </data>
+  <data name="RequireDoubleClick" xml:space="preserve">
+    <value>Require Double-Click</value>
+  </data>
+  <data name="RestoreAllWindowsOnAppSwitch" xml:space="preserve">
+    <value>Restore All Windows on App Switch</value>
+  </data>
+  <data name="ShowDesktopExplorer" xml:space="preserve">
+    <value>Show Desktop (Explorer)</value>
+  </data>
+  <data name="StartWithWindows" xml:space="preserve">
+    <value>Start with Windows</value>
+  </data>
+  <data name="StartupDeferredInitializationFailed" xml:space="preserve">
+    <value>Deferred initialization failed</value>
+  </data>
+  <data name="StartupErrorCaption" xml:space="preserve">
+    <value>PeekDesktop failed to start</value>
+  </data>
+  <data name="StartupErrorMessage" xml:space="preserve">
+    <value>{0}
+
+{1}</value>
+  </data>
+  <data name="StartupProgramFailed" xml:space="preserve">
+    <value>Program startup failed</value>
+  </data>
+  <data name="Tooltip" xml:space="preserve">
+    <value>PeekDesktop - {0}</value>
+  </data>
+  <data name="UnknownVersion" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="UpdateAlreadyCheckingMessage" xml:space="preserve">
+    <value>PeekDesktop is already checking for updates.</value>
+  </data>
+  <data name="UpdateAlreadyLatestMessage" xml:space="preserve">
+    <value>You're already on the latest version of PeekDesktop ({0}).</value>
+  </data>
+  <data name="UpdateAvailableBalloonText" xml:space="preserve">
+    <value>Version {0} is available. Click here to download and install.</value>
+  </data>
+  <data name="UpdateAvailableBalloonTitle" xml:space="preserve">
+    <value>PeekDesktop Update Available</value>
+  </data>
+  <data name="UpdateAvailableCaption" xml:space="preserve">
+    <value>Update Available</value>
+  </data>
+  <data name="UpdateAvailablePromptMessage" xml:space="preserve">
+    <value>PeekDesktop {0} is available.
+
+Download and install it now? PeekDesktop will restart automatically.</value>
+  </data>
+  <data name="UpdateCheckErrorCaption" xml:space="preserve">
+    <value>Update Error</value>
+  </data>
+  <data name="UpdateCheckFailedMessage" xml:space="preserve">
+    <value>PeekDesktop couldn't check for updates.
+
+{0}</value>
+  </data>
+  <data name="UpdateInstalledCaption" xml:space="preserve">
+    <value>Update Installed</value>
+  </data>
+  <data name="UpdateInstalledRestartFailedMessage" xml:space="preserve">
+    <value>The update was installed but PeekDesktop could not restart automatically.
+
+Please start PeekDesktop manually.</value>
+  </data>
+  <data name="UpdateInstallFailedMessage" xml:space="preserve">
+    <value>PeekDesktop couldn't install the update.
+
+{0}</value>
+  </data>
+  <data name="UpdateMenuCaption" xml:space="preserve">
+    <value>PeekDesktop Update</value>
+  </data>
+  <data name="UpdateNewVersion" xml:space="preserve">
+    <value>new version</value>
+  </data>
+</root>

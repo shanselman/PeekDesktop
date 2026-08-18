@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace PeekDesktop;
@@ -30,7 +31,8 @@ internal static class AppDiagnostics
     private static void WriteLine(string? category, string message)
     {
         string prefix = category is null ? "PeekDesktop" : $"PeekDesktop {category}";
-        string line = $"[{prefix} {DateTime.Now:HH:mm:ss.fff}] {message}";
+        string timestamp = DateTime.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        string line = $"[{prefix} {timestamp}] {message}";
         Trace.WriteLine(line);
         OutputDebugString(line);
     }

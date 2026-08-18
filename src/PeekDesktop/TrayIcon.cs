@@ -1,4 +1,5 @@
 using System;
+using PeekDesktop.Resources;
 
 namespace PeekDesktop;
 
@@ -50,8 +51,8 @@ internal sealed class TrayIcon : IDisposable
         _appUpdater.UpdateAvailable += (_, e) =>
         {
             _trayIcon.ShowBalloon(
-                "PeekDesktop Update Available",
-                $"Version {e.Version} is available. Click here to download and install.");
+                Strings.UpdateAvailableBalloonTitle,
+                Strings.UpdateAvailableBalloonText(e.Version));
         };
 
         // Let the updater remove the tray icon before exiting during update
@@ -101,22 +102,22 @@ internal sealed class TrayIcon : IDisposable
     {
         using var menu = new Win32Menu();
 
-        menu.AddItem(ID_ENABLED, "Enabled", ToggleEnabled, _settings.Enabled);
-        menu.AddItem(ID_STARTUP, "Start with Windows", ToggleStartup, _settings.StartWithWindows);
-        menu.AddItem(ID_DOUBLECLICK, "Require Double-Click", ToggleDoubleClick, _settings.RequireDoubleClick);
-        menu.AddItem(ID_DESKTOP_CLICK, "Peek on Desktop Click", ToggleDesktopClick, _settings.PeekOnDesktopClick);
-        menu.AddItem(ID_TASKBAR_CLICK, "Peek on Taskbar Click", ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
-        menu.AddItem(ID_RESTORE_ON_APP_OPEN, "Restore All Windows on App Switch", ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
-        menu.AddItem(ID_GAME_GUARD, "Pause While Gaming / Full-Screen", ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
+        menu.AddItem(ID_ENABLED, Strings.Enabled, ToggleEnabled, _settings.Enabled);
+        menu.AddItem(ID_STARTUP, Strings.StartWithWindows, ToggleStartup, _settings.StartWithWindows);
+        menu.AddItem(ID_DOUBLECLICK, Strings.RequireDoubleClick, ToggleDoubleClick, _settings.RequireDoubleClick);
+        menu.AddItem(ID_DESKTOP_CLICK, Strings.PeekOnDesktopClick, ToggleDesktopClick, _settings.PeekOnDesktopClick);
+        menu.AddItem(ID_TASKBAR_CLICK, Strings.PeekOnTaskbarClick, ToggleTaskbarClick, _settings.PeekOnTaskbarClick);
+        menu.AddItem(ID_RESTORE_ON_APP_OPEN, Strings.RestoreAllWindowsOnAppSwitch, ToggleRestoreOnAppOpen, _settings.RestoreHiddenWindowsOnAppOpen);
+        menu.AddItem(ID_GAME_GUARD, Strings.PauseWhileGamingFullscreen, ToggleGameGuard, _settings.PauseWhileFullscreenAppActive);
         menu.AddSeparator();
-        menu.AddItem(ID_MODE_NATIVE, "Show Desktop (Explorer)", () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
-        menu.AddItem(ID_MODE_FLYAWAY, "Fly Away (Experimental)", () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
+        menu.AddItem(ID_MODE_NATIVE, Strings.ShowDesktopExplorer, () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
+        menu.AddItem(ID_MODE_FLYAWAY, Strings.FlyAwayExperimental, () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
         menu.AddSeparator();
-        menu.AddItem(ID_ABOUT, "About PeekDesktop", ShowAbout);
-        menu.AddItem(ID_UPDATES, "Check for Updates", CheckForUpdates);
-        menu.AddItem(ID_AUTO_UPDATES, "Auto-Check for Updates", ToggleAutoUpdates, _settings.AutoCheckForUpdates);
+        menu.AddItem(ID_ABOUT, Strings.AboutCaption, ShowAbout);
+        menu.AddItem(ID_UPDATES, Strings.CheckForUpdates, CheckForUpdates);
+        menu.AddItem(ID_AUTO_UPDATES, Strings.AutoCheckForUpdates, ToggleAutoUpdates, _settings.AutoCheckForUpdates);
         menu.AddSeparator();
-        menu.AddItem(ID_EXIT, "Exit", DoExit);
+        menu.AddItem(ID_EXIT, Strings.Exit, DoExit);
 
         menu.Show(_messageLoop.Handle);
     }
@@ -180,7 +181,7 @@ internal sealed class TrayIcon : IDisposable
     {
         _settings.PeekMode = peekMode;
         _desktopPeek.SetPeekMode(peekMode);
-        _trayIcon.UpdateTooltip($"PeekDesktop - {GetPeekModeDisplayName(peekMode)}");
+        _trayIcon.UpdateTooltip(Strings.TooltipFormat(GetPeekModeDisplayName(peekMode)));
         _settings.Save();
     }
 
@@ -189,15 +190,8 @@ internal sealed class TrayIcon : IDisposable
         string version = GetDisplayVersion();
         NativeMethods.MessageBoxW(
             IntPtr.Zero,
-            $"PeekDesktop v{version}\n\n" +
-            "Click your desktop wallpaper to peek at your desktop,\n" +
-            "just like macOS Sonoma.\n\n" +
-            "Click any window or the taskbar to restore.\n" +
-            "Peek Style lets you switch between Explorer show desktop\n" +
-            "and fly-away mode.\n\n" +
-            "Updates come from GitHub Releases.\n\n" +
-            "github.com/shanselman/PeekDesktop",
-            "About PeekDesktop",
+            Strings.AboutMessageFormat(version),
+            Strings.AboutCaption,
             NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
     }
 
@@ -224,7 +218,7 @@ internal sealed class TrayIcon : IDisposable
         string? version = productVersion ?? fileVersion?.ToString();
 
         if (string.IsNullOrWhiteSpace(version))
-            return "unknown";
+            return Strings.UnknownVersion;
 
         int plusIndex = version.IndexOf('+');
         version = plusIndex >= 0 ? version[..plusIndex] : version;
@@ -234,8 +228,8 @@ internal sealed class TrayIcon : IDisposable
 
         return version switch
         {
-            "1.0.0.0" => "dev build",
-            "1.0.0" => "dev build",
+            "1.0.0.0" => Strings.DevBuild,
+            "1.0.0" => Strings.DevBuild,
             _ => version
         };
     }
@@ -244,10 +238,10 @@ internal sealed class TrayIcon : IDisposable
     {
         return peekMode switch
         {
-            PeekMode.Minimize => "Classic Minimize",
-            PeekMode.FlyAway => "Fly Away",
-            PeekMode.NativeShowDesktop => "Native Show Desktop",
-            _ => "Peek"
+            PeekMode.Minimize => Strings.ClassicMinimize,
+            PeekMode.FlyAway => Strings.FlyAway,
+            PeekMode.NativeShowDesktop => Strings.NativeShowDesktop,
+            _ => Strings.Peek
         };
     }
 
