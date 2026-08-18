@@ -33,15 +33,15 @@ That framing matters. A mode that is flashy but occasionally restores incorrectl
 
 ## 2. High-level architecture and important files
 
-PeekDesktop is a .NET 10 WinForms tray application with a very small but well-factored architecture.
+PeekDesktop is a .NET 10 native Win32 tray application with a very small but well-factored architecture.
 
 ### Main runtime pieces
 
 | File | Responsibility | Notes |
 |---|---|---|
-| `src\PeekDesktop\Program.cs` | Entry point and single-instance mutex | Starts a tray-only `ApplicationContext` and defers init until the message loop is ready |
+| `src\PeekDesktop\Program.cs` | Entry point and single-instance mutex | Starts the native `Win32MessageLoop` and defers init until it is pumping |
 | `src\PeekDesktop\DesktopPeek.cs` | Core state machine | Orchestrates Idle <-> Peeking transitions and chooses the active peek implementation |
-| `src\PeekDesktop\MouseHook.cs` | Global mouse detection | Uses `WH_MOUSE_LL` to catch left-clicks and classify them |
+| `src\PeekDesktop\MouseHook.cs` | Explorer-surface mouse detection | Uses `WH_MOUSE_LL`, but only tracks configured desktop/taskbar surfaces |
 | `src\PeekDesktop\DesktopDetector.cs` | Desktop/background/icon discrimination | Differentiates wallpaper clicks from icon clicks |
 | `src\PeekDesktop\FocusWatcher.cs` | Foreground-window monitoring | Uses `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` to know when to restore |
 | `src\PeekDesktop\WindowTracker.cs` | Classic capture/minimize/restore pipeline | Tracks window placement, filters bad candidates, restores Z-order |
@@ -69,12 +69,13 @@ This is the heart of the project. The reliability of the UX depends on correctly
 `MouseHook.cs` installs a global low-level hook using the official Win32 API:
 
 - `SetWindowsHookEx(WH_MOUSE_LL)`
-- capture `WM_LBUTTONDOWN`
+- observe `WM_LBUTTONDOWN`, `WM_MOUSEMOVE`, and `WM_LBUTTONUP`
 - call `WindowFromPoint` to get the window under the cursor
+- immediately pass through clicks outside enabled Explorer desktop/taskbar surfaces
 
-A subtle but important implementation detail: the hook callback posts heavier work back to the UI thread via `SynchronizationContext`.
+A subtle but important implementation detail: the hook callback posts heavier work back to the application thread via `Win32MessageLoop.BeginInvoke`.
 
-That is exactly the right design. Low-level hooks must return quickly or Windows may unhook them or make the system feel sluggish. PeekDesktop only captures the point and target window in the hook, then does the classification work later.
+Low-level hooks must return quickly or Windows may unhook them or make the system feel sluggish. PeekDesktop only performs lightweight surface gating and click-sequence tracking in the hook. Explorer-specific hierarchy, list-view, MSAA, and UI Automation classification runs after the hook has returned. Non-Explorer clicks do not create pending state or classification callbacks.
 
 ### Step 2: classify the click target
 
@@ -82,22 +83,32 @@ That is exactly the right design. Low-level hooks must return quickly or Windows
 
 - `DesktopBackground`
 - `DesktopIcon`
+- `TaskbarBackground`
 - `NonDesktop`
 
 It does this in layers:
 
-1. **Desktop ancestry check**
+1. **Configured Explorer surface check**
+   - Verify that the target belongs to `explorer.exe`.
+   - Reject desktop or taskbar surfaces when their corresponding trigger is disabled.
+   - Ignore ordinary Explorer windows that are not part of the desktop or taskbar.
+
+2. **Desktop ancestry check**
    - Walk up the parent chain looking for:
      - `Progman`
      - `WorkerW` that actually hosts `SHELLDLL_DefView`
    - This avoids treating unrelated `WorkerW` shell helper windows as the real desktop.
 
-2. **List-view hit test for icons**
+3. **List-view hit test for icons**
    - If the click is over `SysListView32`, the code performs a real list-view hit test to determine whether the pointer landed on an icon item or just empty desktop area.
 
-3. **MSAA accessibility fallback**
+4. **MSAA accessibility fallback**
    - `AccessibleObjectFromPoint` is used as a fallback to inspect the accessibility role at the click point.
    - If the role is `ROLE_SYSTEM_LISTITEM`, the click is treated as an icon click.
+
+5. **Taskbar blank-area check**
+   - Known taskbar ancestry is checked first.
+   - Windows 11 composition overlays fall back to UI Automation so buttons remain interactive while truly blank space can trigger peek.
 
 This two-layer icon detection is important. `WindowFromPoint` alone is not enough because the desktop surface and the icon list view overlap conceptually.
 
@@ -107,7 +118,7 @@ This two-layer icon detection is important. `WindowFromPoint` alone is not enoug
 
 ```text
 Idle -> Peeking   when empty wallpaper is clicked
-Peeking -> Idle   when a non-desktop window is activated or clicked
+Peeking -> Idle   when a non-desktop window is activated
 ```
 
 Key fields:

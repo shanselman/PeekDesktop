@@ -51,8 +51,20 @@ internal static class Strings
 
     internal static string GetString(string name)
     {
-        return ResourceManager.GetString(name, CultureInfo.CurrentUICulture)
-            ?? throw new MissingManifestResourceException($"Missing localized string resource: {name}");
+        try
+        {
+            string? value = ResourceManager.GetString(name, CultureInfo.CurrentUICulture);
+            if (value is not null)
+                return value;
+
+            PeekDesktop.AppDiagnostics.Log($"Missing localized string resource: {name}");
+        }
+        catch (MissingManifestResourceException ex)
+        {
+            PeekDesktop.AppDiagnostics.Log($"Localization resources unavailable for {name}: {ex.Message}");
+        }
+
+        return name;
     }
 
     private static string Format(string name, params object[] args)

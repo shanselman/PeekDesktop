@@ -97,6 +97,14 @@ jobs:
           /p:AssemblyInformationalVersion=$env:FULLVERSION `
           --self-contained
 
+    - name: Verify NativeAOT localization
+      shell: pwsh
+      run: |
+        & "src/PeekDesktop/bin/Release/net10.0-windows/win-x64/publish/PeekDesktop.exe" --selftest-localization
+        if ($LASTEXITCODE -ne 0) {
+          throw "Published localization self-test failed with exit code $LASTEXITCODE."
+        }
+
     - name: Build ARM64
       run: |
         dotnet publish src/PeekDesktop/PeekDesktop.csproj `
