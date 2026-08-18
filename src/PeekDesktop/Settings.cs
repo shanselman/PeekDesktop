@@ -22,6 +22,7 @@ public sealed class Settings
     public bool StartWithWindows { get; set; } = false;
     public bool RequireDoubleClick { get; set; } = false;
     public bool PauseWhileFullscreenAppActive { get; set; } = true;
+    public bool PeekOnDesktopClick { get; set; } = true;
     public bool PeekOnTaskbarClick { get; set; } = false;
     public bool RestoreHiddenWindowsOnAppOpen { get; set; } = true;
     public bool AutoCheckForUpdates { get; set; } = true;
@@ -34,9 +35,15 @@ public sealed class Settings
             if (File.Exists(SettingsPath))
             {
                 byte[] jsonBytes = File.ReadAllBytes(SettingsPath);
+                bool missingTaskbarClickSetting = !JsonContainsProperty(jsonBytes, "PeekOnTaskbarClick"u8);
                 bool shouldSave = !JsonContainsProperty(jsonBytes, "RestoreHiddenWindowsOnAppOpen"u8)
-                    || !JsonContainsProperty(jsonBytes, "AutoCheckForUpdates"u8);
+                    || !JsonContainsProperty(jsonBytes, "AutoCheckForUpdates"u8)
+                    || !JsonContainsProperty(jsonBytes, "PeekOnDesktopClick"u8)
+                    || missingTaskbarClickSetting;
                 Settings settings = DeserializeUtf8(jsonBytes);
+                if (missingTaskbarClickSetting)
+                    settings.PeekOnTaskbarClick = true;
+
                 PeekMode normalizedMode = NormalizePeekMode(settings.PeekMode);
                 if (settings.PeekMode != normalizedMode)
                 {
@@ -123,6 +130,11 @@ public sealed class Settings
                 reader.Read();
                 settings.PeekOnTaskbarClick = reader.GetBoolean();
             }
+            else if (reader.ValueTextEquals("PeekOnDesktopClick"u8))
+            {
+                reader.Read();
+                settings.PeekOnDesktopClick = reader.GetBoolean();
+            }
             else if (reader.ValueTextEquals("RestoreHiddenWindowsOnAppOpen"u8))
             {
                 reader.Read();
@@ -181,6 +193,7 @@ public sealed class Settings
         writer.WriteBoolean("StartWithWindows"u8, StartWithWindows);
         writer.WriteBoolean("RequireDoubleClick"u8, RequireDoubleClick);
         writer.WriteBoolean("PauseWhileFullscreenAppActive"u8, PauseWhileFullscreenAppActive);
+        writer.WriteBoolean("PeekOnDesktopClick"u8, PeekOnDesktopClick);
         writer.WriteBoolean("PeekOnTaskbarClick"u8, PeekOnTaskbarClick);
         writer.WriteBoolean("RestoreHiddenWindowsOnAppOpen"u8, RestoreHiddenWindowsOnAppOpen);
         writer.WriteBoolean("AutoCheckForUpdates"u8, AutoCheckForUpdates);

@@ -6,7 +6,8 @@ internal enum DesktopClickTarget
 {
     NonDesktop,
     DesktopBackground,
-    DesktopIcon
+    DesktopIcon,
+    TaskbarBackground
 }
 
 /// <summary>
@@ -16,40 +17,38 @@ internal enum DesktopClickTarget
 public static class DesktopDetector
 {
     /// <summary>
-    /// When true, clicks on empty taskbar area also trigger desktop peek.
-    /// </summary>
-    public static bool PeekOnTaskbarClick { get; set; }
-
-    /// <summary>
     /// Classifies a click as hitting the desktop wallpaper, a desktop icon,
     /// or something unrelated to the desktop.
     /// </summary>
-    internal static DesktopClickTarget GetClickTarget(IntPtr hwnd, NativeMethods.POINT point)
+    internal static DesktopClickTarget GetClickTarget(
+        IntPtr hwnd,
+        NativeMethods.POINT point,
+        bool includeDesktop,
+        bool includeTaskbar)
     {
-        if (PeekOnTaskbarClick && IsTaskbarBlankAreaWindow(hwnd, point))
+        if (!IsPotentialPeekSurfaceWindow(hwnd, point, includeDesktop, includeTaskbar))
+            return DesktopClickTarget.NonDesktop;
+
+        if (includeTaskbar && IsTaskbarBlankAreaWindow(hwnd, point))
         {
             AppDiagnostics.Log("Taskbar blank-area click detected");
-            return DesktopClickTarget.DesktopBackground;
+            return DesktopClickTarget.TaskbarBackground;
         }
 
-        if (PeekOnTaskbarClick && IsMonitorTaskbarAreaPoint(point))
+        if (includeTaskbar && IsMonitorTaskbarAreaPoint(point))
         {
             AppDiagnostics.Log($"Taskbar-area click detected without taskbar hwnd at {NativeMethods.DescribePoint(point)}; deferring to UIA");
             if (ClassifyTaskbarOverlayPoint(point))
             {
                 AppDiagnostics.Log("Taskbar blank-area click detected");
-                return DesktopClickTarget.DesktopBackground;
+                return DesktopClickTarget.TaskbarBackground;
             }
         }
 
-        if (!IsDesktopRelatedWindow(hwnd))
+        if (!includeDesktop || !IsDesktopRelatedWindow(hwnd))
         {
             AppDiagnostics.Log($"Desktop relationship check failed at {NativeMethods.DescribePoint(point)}");
             AppDiagnostics.Log($"Desktop relationship reason: {GetDesktopRelationshipReason(hwnd)}");
-
-            if (NativeMethods.TryGetAccessibleDetailsAtPoint(point, out int role, out string name))
-                AppDiagnostics.Log($"Non-desktop accessibility probe: role=0x{role:X} name=\"{name}\"");
-
             return DesktopClickTarget.NonDesktop;
         }
 
@@ -70,6 +69,41 @@ public static class DesktopDetector
         }
 
         return DesktopClickTarget.DesktopBackground;
+    }
+
+    internal static bool IsPotentialPeekSurfaceWindow(
+        IntPtr hwnd,
+        NativeMethods.POINT point,
+        bool includeDesktop,
+        bool includeTaskbar)
+    {
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        bool isConfiguredSurface = (includeDesktop && IsDesktopRelatedWindow(hwnd))
+            || (includeTaskbar
+                && (IsTaskbarRelatedWindow(hwnd) || IsMonitorTaskbarAreaPoint(point)));
+
+        return isConfiguredSurface && IsExplorerOwnedWindow(hwnd);
+    }
+
+    private static bool IsExplorerOwnedWindow(IntPtr hwnd)
+    {
+        _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint processId);
+        if (processId == 0)
+            return false;
+
+        return WindowBelongsToProcess(NativeMethods.FindWindow("Progman", null), processId)
+            || WindowBelongsToProcess(NativeMethods.FindWindow("Shell_TrayWnd", null), processId);
+    }
+
+    private static bool WindowBelongsToProcess(IntPtr hwnd, uint processId)
+    {
+        if (hwnd == IntPtr.Zero)
+            return false;
+
+        _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint windowProcessId);
+        return windowProcessId == processId;
     }
 
     internal static string GetDesktopRelationshipReason(IntPtr hwnd)
@@ -166,6 +200,24 @@ public static class DesktopDetector
             string className = NativeMethods.GetWindowClassName(current);
             if (string.Equals(className, "SysListView32", StringComparison.OrdinalIgnoreCase))
                 return true;
+
+            current = NativeMethods.GetParent(current);
+        }
+
+        return false;
+    }
+
+    private static bool IsTaskbarRelatedWindow(IntPtr hwnd)
+    {
+        IntPtr current = hwnd;
+        while (current != IntPtr.Zero)
+        {
+            string className = NativeMethods.GetWindowClassName(current);
+            if (string.Equals(className, "Shell_TrayWnd", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(className, "Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
 
             current = NativeMethods.GetParent(current);
         }

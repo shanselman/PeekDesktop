@@ -1,0 +1,183 @@
+name: Winget Submit
+
+on:
+  release:
+    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to submit, for example v0.9.6
+        required: true
+        type: string
+    secrets:
+      WINGET_CREATE_GITHUB_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit, for example v0.9.6
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: winget-submit-${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
+    runs-on: windows-latest
+
+    env:
+      PACKAGE_ID: Hanselman.PeekDesktop
+      APP_NAME: PeekDesktop
+      COMMAND_ALIAS: peekdesktop
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Resolve release
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "release") {
+            "${{ github.event.release.tag_name }}"
+          } else {
+            "${{ inputs.tag }}"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw "A release tag is required."
+          }
+
+          if (!$tag.StartsWith("v", [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Release tag '$tag' must start with v."
+          }
+
+          $version = $tag.TrimStart("v")
+          "TAG=$tag" >> $env:GITHUB_ENV
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "RELEASE_URL=https://github.com/${{ github.repository }}/releases/tag/$tag" >> $env:GITHUB_ENV
+
+      - name: Download release assets
+        shell: pwsh
+        run: |
+          $baseUrl = "https://github.com/${{ github.repository }}/releases/download/$env:TAG"
+          $assets = @(
+            @{ Name = "$env:APP_NAME-$env:TAG-win-x64.zip"; EnvName = "X64_SHA256" },
+            @{ Name = "$env:APP_NAME-$env:TAG-win-arm64.zip"; EnvName = "ARM64_SHA256" }
+          )
+
+          New-Item -ItemType Directory -Path ".winget-assets" -Force | Out-Null
+          foreach ($asset in $assets) {
+            $url = "$baseUrl/$($asset.Name)"
+            $path = Join-Path ".winget-assets" $asset.Name
+            Invoke-WebRequest -Uri $url -OutFile $path
+
+            $file = Get-Item $path
+            if ($file.Length -le 0) {
+              throw "Downloaded asset '$($asset.Name)' is empty."
+            }
+
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $path).Hash
+            "$($asset.EnvName)=$hash" >> $env:GITHUB_ENV
+          }
+
+      - name: Create manifest
+        shell: pwsh
+        run: |
+          $manifestRoot = Join-Path "winget-manifest" "manifests/h/Hanselman/PeekDesktop/$env:VERSION"
+          New-Item -ItemType Directory -Path $manifestRoot -Force | Out-Null
+
+          $release = gh release view $env:TAG --repo $env:GITHUB_REPOSITORY --json publishedAt | ConvertFrom-Json
+          $releaseDate = ([DateTime]$release.publishedAt).ToUniversalTime().ToString("yyyy-MM-dd")
+          $baseUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG"
+          $x64Url = "$baseUrl/$env:APP_NAME-$env:TAG-win-x64.zip"
+          $arm64Url = "$baseUrl/$env:APP_NAME-$env:TAG-win-arm64.zip"
+
+          @"
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+
+          PackageIdentifier: $env:PACKAGE_ID
+          PackageVersion: $env:VERSION
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.10.0
+          "@ -replace "^[ \t]{10}", "" | Set-Content -Path (Join-Path $manifestRoot "$env:PACKAGE_ID.yaml") -Encoding utf8NoBOM
+
+          @"
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+          PackageIdentifier: $env:PACKAGE_ID
+          PackageVersion: $env:VERSION
+          PackageLocale: en-US
+          Publisher: Scott Hanselman
+          PublisherUrl: https://www.hanselman.com/
+          PublisherSupportUrl: https://github.com/$env:GITHUB_REPOSITORY/issues
+          Author: Scott Hanselman
+          PackageName: PeekDesktop
+          PackageUrl: https://github.com/$env:GITHUB_REPOSITORY
+          License: MIT
+          LicenseUrl: https://github.com/$env:GITHUB_REPOSITORY/blob/main/LICENSE
+          Copyright: Copyright (c) 2026 Scott Hanselman
+          ShortDescription: Click desktop wallpaper or taskbar space to reveal your desktop.
+          Description: PeekDesktop brings macOS Sonoma-style click-to-reveal-desktop behavior to Windows, with tray options for desktop clicks, taskbar clicks, double-click activation, and Explorer or fly-away peek styles.
+          Moniker: peekdesktop
+          Tags:
+          - desktop
+          - productivity
+          - show-desktop
+          - taskbar
+          - windows
+          ReleaseNotesUrl: $env:RELEASE_URL
+          ManifestType: defaultLocale
+          ManifestVersion: 1.10.0
+          "@ -replace "^[ \t]{10}", "" | Set-Content -Path (Join-Path $manifestRoot "$env:PACKAGE_ID.locale.en-US.yaml") -Encoding utf8NoBOM
+
+          @"
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+
+          PackageIdentifier: $env:PACKAGE_ID
+          PackageVersion: $env:VERSION
+          InstallerType: zip
+          NestedInstallerType: portable
+          UpgradeBehavior: uninstallPrevious
+          Commands:
+          - $env:COMMAND_ALIAS
+          Installers:
+          - Architecture: x64
+            NestedInstallerFiles:
+            - RelativeFilePath: PeekDesktop.exe
+              PortableCommandAlias: $env:COMMAND_ALIAS
+            InstallerUrl: $x64Url
+            InstallerSha256: $env:X64_SHA256
+          - Architecture: arm64
+            NestedInstallerFiles:
+            - RelativeFilePath: PeekDesktop.exe
+              PortableCommandAlias: $env:COMMAND_ALIAS
+            InstallerUrl: $arm64Url
+            InstallerSha256: $env:ARM64_SHA256
+          ManifestType: installer
+          ManifestVersion: 1.10.0
+          ReleaseDate: $releaseDate
+          "@ -replace "^[ \t]{10}", "" | Set-Content -Path (Join-Path $manifestRoot "$env:PACKAGE_ID.installer.yaml") -Encoding utf8NoBOM
+
+          "MANIFEST_ROOT=$manifestRoot" >> $env:GITHUB_ENV
+
+      - name: Download WingetCreate
+        shell: pwsh
+        run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Submit manifest
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_CREATE_GITHUB_TOKEN)) {
+            throw "Set the WINGET_CREATE_GITHUB_TOKEN repository secret before submitting Winget manifests."
+          }
+
+          .\wingetcreate.exe submit `
+            --prtitle "New version: $env:PACKAGE_ID version $env:VERSION" `
+            --token $env:WINGET_CREATE_GITHUB_TOKEN `
+            --no-open `
+            $env:MANIFEST_ROOT

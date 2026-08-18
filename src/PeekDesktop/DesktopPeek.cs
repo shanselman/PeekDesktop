@@ -25,7 +25,7 @@ public sealed class DesktopPeek : IDisposable
         "gamebarpresencewriter"
     };
 
-    private readonly MouseHook _mouseHook = new();
+    private readonly MouseHook _mouseHook;
     private readonly FocusWatcher _focusWatcher = new();
     private readonly WindowTracker _windowTracker = new();
     private readonly List<IntPtr> _deferredTeamsRestoreHandles = new();
@@ -35,6 +35,7 @@ public sealed class DesktopPeek : IDisposable
     private bool _nativeShellToggled;
     private bool _pauseWhileFullscreenAppActive;
     private bool _restoreHiddenWindowsOnAppOpen;
+    private bool _peekOnDesktopClick;
     private bool _isSuppressedForGaming;
     private long _ignoreFocusUntil;
     private long _ignoreRestoreClickUntil;
@@ -45,17 +46,22 @@ public sealed class DesktopPeek : IDisposable
     public bool IsPeeking => _isPeeking;
     public PeekMode PeekMode { get; set; }
 
-    public DesktopPeek(Settings settings)
+    public DesktopPeek(Settings settings, Action<Action> beginInvoke)
     {
+        _mouseHook = new MouseHook(beginInvoke)
+        {
+            RequireDoubleClick = settings.RequireDoubleClick,
+            MonitorDesktopClicks = settings.PeekOnDesktopClick,
+            MonitorTaskbarClicks = settings.PeekOnTaskbarClick
+        };
         PeekMode = NormalizePeekMode(settings.PeekMode);
-        _mouseHook.RequireDoubleClick = settings.RequireDoubleClick;
         _pauseWhileFullscreenAppActive = settings.PauseWhileFullscreenAppActive;
         _restoreHiddenWindowsOnAppOpen = settings.RestoreHiddenWindowsOnAppOpen;
-        DesktopDetector.PeekOnTaskbarClick = settings.PeekOnTaskbarClick;
+        _peekOnDesktopClick = settings.PeekOnDesktopClick;
         AppDiagnostics.Log("DesktopPeek created");
         _mouseHook.DesktopClicked += OnDesktopClicked;
         _mouseHook.DesktopIconClicked += OnDesktopIconClicked;
-        _mouseHook.NonDesktopClicked += OnNonDesktopClicked;
+        _mouseHook.TaskbarClicked += OnTaskbarClicked;
         _focusWatcher.FocusChanged += OnFocusChanged;
     }
 
@@ -67,8 +73,15 @@ public sealed class DesktopPeek : IDisposable
 
     public void SetPeekOnTaskbarClick(bool enabled)
     {
-        DesktopDetector.PeekOnTaskbarClick = enabled;
+        _mouseHook.MonitorTaskbarClicks = enabled;
         AppDiagnostics.Log($"PeekOnTaskbarClick set to {enabled}");
+    }
+
+    public void SetPeekOnDesktopClick(bool enabled)
+    {
+        _peekOnDesktopClick = enabled;
+        _mouseHook.MonitorDesktopClicks = enabled;
+        AppDiagnostics.Log($"PeekOnDesktopClick set to {enabled}");
     }
 
     public void SetPauseWhileFullscreenAppActive(bool enabled)
@@ -150,15 +163,31 @@ public sealed class DesktopPeek : IDisposable
 
     private void OnDesktopClicked(object? sender, EventArgs e)
     {
+        if (!_peekOnDesktopClick)
+        {
+            AppDiagnostics.Log("Desktop click ignored because desktop click peeking is disabled");
+            return;
+        }
+
+        HandlePeekSurfaceClicked("Desktop");
+    }
+
+    private void OnTaskbarClicked(object? sender, EventArgs e)
+    {
+        HandlePeekSurfaceClicked("Taskbar");
+    }
+
+    private void HandlePeekSurfaceClicked(string source)
+    {
         if (!IsEnabled || _isTransitioning)
         {
-            AppDiagnostics.Log($"Desktop click ignored. Enabled={IsEnabled} IsPeeking={_isPeeking} Transitioning={_isTransitioning}");
+            AppDiagnostics.Log($"{source} click ignored. Enabled={IsEnabled} IsPeeking={_isPeeking} Transitioning={_isTransitioning}");
             return;
         }
 
         if (_isSuppressedForGaming)
         {
-            AppDiagnostics.Log($"Desktop click ignored because gaming protection is active ({_gameSuppressionReason})");
+            AppDiagnostics.Log($"{source} click ignored because gaming protection is active ({_gameSuppressionReason})");
             return;
         }
 
@@ -166,16 +195,16 @@ public sealed class DesktopPeek : IDisposable
         {
             if (Environment.TickCount64 < _ignoreRestoreClickUntil)
             {
-                AppDiagnostics.Log("Desktop click ignored because it immediately followed activation");
+                AppDiagnostics.Log($"{source} click ignored because it immediately followed activation");
                 return;
             }
 
-            AppDiagnostics.Log("Desktop clicked again while peeking; restoring windows");
+            AppDiagnostics.Log($"{source} clicked again while peeking; restoring windows");
             RestoreWindows();
             return;
         }
 
-        AppDiagnostics.Log("Desktop click accepted; entering peek mode");
+        AppDiagnostics.Log($"{source} click accepted; entering peek mode");
         PeekDesktopNow();
     }
 
@@ -194,30 +223,6 @@ public sealed class DesktopPeek : IDisposable
         }
 
         AppDiagnostics.Log("Desktop icon clicked; not entering peek mode");
-    }
-
-    private void OnNonDesktopClicked(object? sender, EventArgs e)
-    {
-        if (!_isPeeking || _isTransitioning)
-        {
-            AppDiagnostics.Log($"Non-desktop click ignored. IsPeeking={_isPeeking} Transitioning={_isTransitioning}");
-            return;
-        }
-
-        if (Environment.TickCount64 < _ignoreRestoreClickUntil)
-        {
-            AppDiagnostics.Log("Non-desktop click ignored because it immediately followed activation");
-            return;
-        }
-
-        if (_nativeShellToggled)
-        {
-            AppDiagnostics.Log("Non-desktop click while native show desktop is active; deferring restore to shell");
-            return;
-        }
-
-        AppDiagnostics.Log("Non-desktop click detected while peeking; restoring windows");
-        RestoreWindows();
     }
 
     private void OnFocusChanged(object? sender, FocusChangedEventArgs e)
@@ -282,6 +287,12 @@ public sealed class DesktopPeek : IDisposable
                 _activePeekMode = PeekMode;
             }
 
+            return;
+        }
+
+        if (!_restoreHiddenWindowsOnAppOpen)
+        {
+            AppDiagnostics.Log("Foreground moved away from desktop while peeking; staying in peek mode because restore-on-app-switch is disabled");
             return;
         }
 

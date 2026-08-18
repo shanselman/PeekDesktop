@@ -56,7 +56,7 @@ public static class Program
             AppDiagnostics.Log("Message loop created");
 
             // Defer initialization until the message loop is pumping so hooks
-            // and SynchronizationContext-like callbacks work correctly.
+            // and posted callbacks work correctly.
             messageLoop.PostDeferredAction(1, () =>
             {
                 try
@@ -96,7 +96,7 @@ public static class Program
     {
         var settings = Settings.Load();
         Settings.SetAutoStart(settings.StartWithWindows);
-        _desktopPeek = new DesktopPeek(settings);
+        _desktopPeek = new DesktopPeek(settings, messageLoop.BeginInvoke);
         _desktopPeek.SetRestoreHiddenWindowsOnAppOpen(settings.RestoreHiddenWindowsOnAppOpen);
         _appUpdater = new AppUpdater(messageLoop);
 

@@ -2,7 +2,7 @@
 
 **Click empty desktop wallpaper (or empty taskbar area) to reveal your desktop — just like macOS Sonoma.**
 
-PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. By default it uses Explorer's native **Show Desktop** behavior, and it also includes an optional **Fly Away** experimental style plus tray toggles for **Require Double-Click** and **Peek on Taskbar Click**. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
+PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. By default it uses Explorer's native **Show Desktop** behavior, and it also includes an optional **Fly Away** experimental style plus tray toggles for **Require Double-Click**, **Peek on Desktop Click**, and **Peek on Taskbar Click**. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
 
 <p align="center">
   <img src="img/demo.gif" alt="PeekDesktop demo showing windows minimizing when you click the wallpaper" width="900" />
@@ -12,10 +12,20 @@ PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to
 
 📥 **[Download the latest release](https://github.com/shanselman/PeekDesktop/releases/latest)**
 
+### Install with Winget
+
+PeekDesktop is submitted to the Windows Package Manager community repository as `Hanselman.PeekDesktop` when tagged releases are published. After the community manifest is accepted, install it with:
+
+```powershell
+winget install Hanselman.PeekDesktop
+```
+
+### Download a release
+
 | File | Platform |
 |------|----------|
-| `PeekDesktop-vX.Y-win-x64.zip` | Intel/AMD (most PCs) |
-| `PeekDesktop-vX.Y-win-arm64.zip` | ARM64 (Surface Pro X, Snapdragon, etc.) |
+| `PeekDesktop-vX.Y.Z-win-x64.zip` | Intel/AMD (most PCs) |
+| `PeekDesktop-vX.Y.Z-win-arm64.zip` | ARM64 (Surface Pro X, Snapdragon, etc.) |
 
 No installer needed. Download the zip, extract it, and run `PeekDesktop.exe`. Release builds are **self-contained**, so you do not need to install .NET separately. It lives in your system tray and **updates itself automatically** — when a new version is available, it downloads, verifies the code signature, and restarts in place.
 
@@ -61,6 +71,7 @@ Right-click the tray icon for options:
 - 🔁 **Start with Windows** — launch automatically at login
 - 🖱️ **Require Double-Click** — optionally require a double-click on the desktop to trigger peek
 - 🎮 **Pause While Gaming / Full-Screen** — on by default for exclusive full-screen and known gaming fullscreen apps
+- 🖥️ **Peek on Desktop Click** — on by default; turn it off for taskbar-only activation
 - 📌 **Peek on Taskbar Click** — optionally trigger peek from empty taskbar space
 - 🪟 **Restore All Windows on App Switch** — on by default; in Explorer show desktop mode, taskbar/Alt+Tab app switches restore all hidden windows behind the selected app
 - 👀 **Peek Style** — switch between Explorer and fly-away modes
@@ -75,6 +86,7 @@ When Windows is in dark mode, the tray menu also follows the system theme when s
 
 - **Small Native AOT single-file builds** for both x64 and ARM64
 - **Peek on Taskbar Click** — optional trigger from empty taskbar space
+- **Taskbar-only activation** — disable desktop-click peeking while keeping taskbar peeking enabled
 - **Dark tray menu support** — follows Windows dark mode when available
 - **Taskbar button Show Desktop** — bypasses keyboard remappers (PowerToys Keyboard Manager, etc.)
 - **Pause While Gaming / Full-Screen** — avoids interference during gaming sessions

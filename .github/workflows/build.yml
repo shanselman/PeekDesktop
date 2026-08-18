@@ -211,7 +211,7 @@ jobs:
         $notes = @"
         ## PeekDesktop $tag
 
-        **Click empty desktop wallpaper to peek at it — just like macOS Sonoma.**
+        **Click empty desktop wallpaper or empty taskbar space to peek at it — just like macOS Sonoma.**
 
         ### 📦 Downloads
 
@@ -223,11 +223,13 @@ jobs:
         **Self-contained single-file** - Extract and run, no .NET installation required.
 
         ### 👀 How It Works
-        - Click empty wallpaper -> reveal the desktop
+        - Click empty wallpaper or empty taskbar area -> reveal the desktop
+        - Use tray options to enable desktop clicks, taskbar clicks, or taskbar-only activation
         - Click or drag desktop icons without triggering peek
         - Click any window, the taskbar, or the wallpaper again -> everything restores
         - Includes Explorer Show Desktop by default plus optional experimental styles
         - Check for updates -> opens the latest GitHub Release page
+        - Winget submission starts automatically after tagged releases; install with `winget install Hanselman.PeekDesktop` after the community manifest is accepted
         "@
 
         Set-Content -Path release-notes.md -Value $notes -Encoding UTF8
@@ -238,3 +240,13 @@ jobs:
           --generate-notes `
           --notes-file release-notes.md `
           artifacts/*.zip
+
+  winget-submit:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget-submit.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit

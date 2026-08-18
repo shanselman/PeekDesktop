@@ -27,6 +27,7 @@ internal static class Program
         RunTest("Version info smoke", options, failures, VersionInfoSmoke);
         RunTest("Notification state stress", options, failures, NotificationStateStress);
         RunTest("Malformed input contracts", options, failures, MalformedInputContracts);
+        RunTest("Mouse click routing logic", options, failures, MouseClickRoutingLogic);
         RunTest($"Leak probe ({options.Iterations:N0} iterations)", options, failures, () => LeakProbe(options));
 
         // Auto-updater tests
@@ -111,6 +112,190 @@ internal static class Program
         bool hasAccessibleDetails = NativeMethods.TryGetAccessibleDetailsAtPoint(point, out int role, out string name);
         if (hasAccessibleDetails || role != 0 || name.Length != 0)
             throw new InvalidOperationException("Accessible details baseline contract was violated.");
+    }
+
+    private static void MouseClickRoutingLogic()
+    {
+        const uint doubleClickTime = 500;
+        const int doubleClickDistance = 2;
+        const int dragDistance = 4;
+        var surfaceWindow = new IntPtr(101);
+        var otherSurfaceWindow = new IntPtr(202);
+        var origin = new NativeMethods.POINT { x = 100, y = 200 };
+        var nearby = new NativeMethods.POINT { x = 101, y = 201 };
+        var dragged = new NativeMethods.POINT { x = 110, y = 200 };
+        var tracker = new MouseClickTracker();
+
+        if (!tracker.TryBeginClick(
+                surfaceWindow,
+                origin,
+                requireDoubleClick: false,
+                tick: 1_000,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance)
+            || !tracker.TryCompleteClick(nearby, dragDistance, dragDistance, out PendingMouseClick singleClick)
+            || singleClick.Window != surfaceWindow
+            || singleClick.Point.x != origin.x
+            || singleClick.Point.y != origin.y)
+        {
+            throw new InvalidOperationException("Single-click mode did not preserve and complete the candidate click.");
+        }
+
+        tracker.Reset();
+        if (tracker.TryBeginClick(
+                surfaceWindow,
+                origin,
+                requireDoubleClick: true,
+                tick: 2_000,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance)
+            || tracker.HasPendingClick)
+        {
+            throw new InvalidOperationException("The first click incorrectly armed double-click activation.");
+        }
+
+        if (!tracker.TryBeginClick(
+                surfaceWindow,
+                nearby,
+                requireDoubleClick: true,
+                tick: 2_200,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance)
+            || !tracker.TryCompleteClick(nearby, dragDistance, dragDistance, out _))
+        {
+            throw new InvalidOperationException("A valid second click did not complete double-click activation.");
+        }
+
+        tracker.Reset();
+        _ = tracker.TryBeginClick(
+            surfaceWindow,
+            origin,
+            requireDoubleClick: true,
+            tick: 3_000,
+            doubleClickTime,
+            doubleClickDistance,
+            doubleClickDistance);
+        if (tracker.TryBeginClick(
+                otherSurfaceWindow,
+                origin,
+                requireDoubleClick: true,
+                tick: 3_100,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance))
+        {
+            throw new InvalidOperationException("Clicks on different Explorer surfaces were combined into a double-click.");
+        }
+
+        tracker.Reset();
+        _ = tracker.TryBeginClick(
+            surfaceWindow,
+            origin,
+            requireDoubleClick: true,
+            tick: 3_500,
+            doubleClickTime,
+            doubleClickDistance,
+            doubleClickDistance);
+        if (tracker.TryBeginClick(
+                surfaceWindow,
+                nearby,
+                requireDoubleClick: true,
+                tick: 4_001,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance))
+        {
+            throw new InvalidOperationException("Clicks outside the system time window were combined into a double-click.");
+        }
+
+        tracker.Reset();
+        _ = tracker.TryBeginClick(
+            surfaceWindow,
+            origin,
+            requireDoubleClick: true,
+            tick: 4_000,
+            doubleClickTime,
+            doubleClickDistance,
+            doubleClickDistance);
+        tracker.Reset();
+        if (tracker.TryBeginClick(
+                surfaceWindow,
+                nearby,
+                requireDoubleClick: true,
+                tick: 4_100,
+                doubleClickTime,
+                doubleClickDistance,
+                doubleClickDistance))
+        {
+            throw new InvalidOperationException("A reset click sequence incorrectly completed a double-click.");
+        }
+
+        tracker.Reset();
+        _ = tracker.TryBeginClick(
+            surfaceWindow,
+            origin,
+            requireDoubleClick: false,
+            tick: 5_000,
+            doubleClickTime,
+            doubleClickDistance,
+            doubleClickDistance);
+        if (!tracker.CancelIfMoved(dragged, dragDistance, dragDistance)
+            || tracker.TryCompleteClick(dragged, dragDistance, dragDistance, out _))
+        {
+            throw new InvalidOperationException("Drag movement did not cancel the pending click.");
+        }
+
+        if (DesktopDetector.IsPotentialPeekSurfaceWindow(
+            IntPtr.Zero,
+            origin,
+            includeDesktop: true,
+            includeTaskbar: true))
+        {
+            throw new InvalidOperationException("A zero window was accepted as an Explorer click surface.");
+        }
+
+        IntPtr taskbarWindow = NativeMethods.FindWindow("Shell_TrayWnd", null);
+        if (taskbarWindow != IntPtr.Zero)
+        {
+            if (!DesktopDetector.IsPotentialPeekSurfaceWindow(
+                    taskbarWindow,
+                    origin,
+                    includeDesktop: false,
+                    includeTaskbar: true)
+                || DesktopDetector.IsPotentialPeekSurfaceWindow(
+                    taskbarWindow,
+                    origin,
+                    includeDesktop: false,
+                    includeTaskbar: false))
+            {
+                throw new InvalidOperationException("Taskbar surface gating did not honor the configured trigger.");
+            }
+        }
+
+        IntPtr desktopWindow = NativeMethods.FindWindow("Progman", null);
+        if (desktopWindow != IntPtr.Zero
+            && (!DesktopDetector.IsPotentialPeekSurfaceWindow(
+                    desktopWindow,
+                    origin,
+                    includeDesktop: true,
+                    includeTaskbar: false)
+                || DesktopDetector.IsPotentialPeekSurfaceWindow(
+                    desktopWindow,
+                    origin,
+                    includeDesktop: false,
+                    includeTaskbar: false)))
+        {
+            throw new InvalidOperationException("Desktop surface gating did not honor the configured trigger.");
+        }
+
+        Action? queuedAction = null;
+        using var hook = new MouseHook(action => queuedAction = action);
+        hook.DispatchMouseClick(IntPtr.Zero, origin);
+        if (queuedAction is null)
+            throw new InvalidOperationException("Mouse classification was not deferred through the supplied dispatcher.");
     }
 
     private static void InvalidHandleMatrix()
