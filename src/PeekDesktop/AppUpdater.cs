@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using PeekDesktop.Resources;
 
 namespace PeekDesktop;
 
@@ -47,8 +48,8 @@ internal sealed class AppUpdater
             {
                 NativeMethods.MessageBoxW(
                     IntPtr.Zero,
-                    "PeekDesktop is already checking for updates.",
-                    "PeekDesktop Update",
+                    Strings.UpdateAlreadyCheckingMessage,
+                    Strings.UpdateMenuCaption,
                     NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
             }
 
@@ -76,8 +77,8 @@ internal sealed class AppUpdater
                 {
                     NativeMethods.MessageBoxW(
                         IntPtr.Zero,
-                        $"You're already on the latest version of PeekDesktop ({currentVersion}).",
-                        "PeekDesktop Update",
+                        Strings.UpdateAlreadyLatestMessage(currentVersion),
+                        Strings.UpdateMenuCaption,
                         NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
                 }
 
@@ -101,8 +102,8 @@ internal sealed class AppUpdater
             {
                 NativeMethods.MessageBoxW(
                     IntPtr.Zero,
-                    $"PeekDesktop couldn't check for updates.\n\n{ex.Message}",
-                    "Update Error",
+                    Strings.UpdateCheckFailedMessage(ex.Message),
+                    Strings.UpdateCheckErrorCaption,
                     NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
             }
         }
@@ -121,12 +122,12 @@ internal sealed class AppUpdater
         if (Interlocked.CompareExchange(ref _isUpdating, 1, 0) != 0)
             return;
 
-        latestVersion ??= _latestRelease is not null ? NormalizeVersion(_latestRelease.TagName) : "new version";
+        latestVersion ??= _latestRelease is not null ? NormalizeVersion(_latestRelease.TagName) : Strings.UpdateNewVersion;
 
         int result = NativeMethods.MessageBoxW(
             IntPtr.Zero,
-            $"PeekDesktop {latestVersion} is available.\n\nDownload and install it now? PeekDesktop will restart automatically.",
-            "Update Available",
+            Strings.UpdateAvailablePromptMessage(latestVersion),
+            Strings.UpdateAvailableCaption,
             NativeMethods.MB_YESNO | NativeMethods.MB_ICONINFORMATION);
 
         if (result != NativeMethods.IDYES)
@@ -226,9 +227,8 @@ internal sealed class AppUpdater
                 {
                     NativeMethods.MessageBoxW(
                         IntPtr.Zero,
-                        "The update was installed but PeekDesktop could not restart automatically.\n\n" +
-                        "Please start PeekDesktop manually.",
-                        "Update Installed",
+                        Strings.UpdateInstalledRestartFailedMessage(),
+                        Strings.UpdateInstalledCaption,
                         NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
                     return;
                 }
@@ -269,8 +269,8 @@ internal sealed class AppUpdater
 
             NativeMethods.MessageBoxW(
                 IntPtr.Zero,
-                $"PeekDesktop couldn't install the update.\n\n{ex.Message}",
-                "Update Error",
+                Strings.UpdateInstallFailedMessage(ex.Message),
+                Strings.UpdateCheckErrorCaption,
                 NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
         }
         finally

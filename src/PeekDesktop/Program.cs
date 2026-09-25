@@ -1,8 +1,10 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using PeekDesktop.Resources;
 
 namespace PeekDesktop;
 
@@ -11,8 +13,14 @@ public static class Program
     private static Mutex? _mutex;
 
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
+        if (args.Length > 0
+            && args[0].Equals("--selftest-localization", StringComparison.OrdinalIgnoreCase))
+        {
+            return RunLocalizationSelfTest();
+        }
+
         bool isRestarting = args.Length > 0
             && args[0].Equals("--restarting", StringComparison.OrdinalIgnoreCase);
 
@@ -40,7 +48,7 @@ public static class Program
             if (!isNewInstance)
             {
                 _mutex.Dispose();
-                return;
+                return 0;
             }
         }
 
@@ -67,7 +75,7 @@ public static class Program
                 }
                 catch (Exception ex)
                 {
-                    HandleFatalStartupError("Deferred initialization failed", ex);
+                    HandleFatalStartupError(Strings.StartupDeferredInitializationFailed, ex);
                     messageLoop.Quit();
                 }
             });
@@ -76,7 +84,7 @@ public static class Program
         }
         catch (Exception ex)
         {
-            HandleFatalStartupError("Program startup failed", ex);
+            HandleFatalStartupError(Strings.StartupProgramFailed, ex);
         }
         finally
         {
@@ -86,6 +94,8 @@ public static class Program
                 _mutex.Dispose();
             }
         }
+
+        return 0;
     }
 
     private static DesktopPeek? _desktopPeek;
@@ -153,9 +163,12 @@ public static class Program
             Directory.CreateDirectory(logDir);
 
             string fatalPath = Path.Combine(logDir, "startup-error.log");
+            string timestamp = DateTime.Now.ToString(
+                "yyyy-MM-dd HH:mm:ss.fff",
+                CultureInfo.InvariantCulture);
             File.AppendAllText(
                 fatalPath,
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {context}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+                $"[{timestamp}] {context}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
         }
         catch
         {
@@ -165,8 +178,37 @@ public static class Program
         AppDiagnostics.Log($"{context}: {ex}");
         NativeMethods.MessageBoxW(
             IntPtr.Zero,
-            $"{context}\n\n{ex.Message}",
-            "PeekDesktop failed to start",
+            Strings.StartupErrorMessage(context, ex.Message),
+            Strings.StartupErrorCaption,
             NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
+    }
+
+    private static int RunLocalizationSelfTest()
+    {
+        CultureInfo originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo originalUiCulture = CultureInfo.CurrentUICulture;
+
+        try
+        {
+            CultureInfo englishFallback = CultureInfo.GetCultureInfo("fr-FR");
+            CultureInfo.CurrentCulture = englishFallback;
+            CultureInfo.CurrentUICulture = englishFallback;
+            if (!string.Equals(Strings.Enabled, "Enabled", StringComparison.Ordinal))
+                return 1;
+
+            CultureInfo simplifiedChinese = CultureInfo.GetCultureInfo("zh-Hans");
+            CultureInfo.CurrentCulture = simplifiedChinese;
+            CultureInfo.CurrentUICulture = simplifiedChinese;
+            return string.Equals(Strings.Enabled, "启用", StringComparison.Ordinal) ? 0 : 2;
+        }
+        catch (CultureNotFoundException)
+        {
+            return 3;
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 }

@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeekDesktop;
+using PeekDesktop.Resources;
 
 internal static class Program
 {
@@ -38,6 +40,7 @@ internal static class Program
         RunTest("WinHttp download to file", options, failures, WinHttpDownloadToFile);
         RunTest("Zip extraction round-trip", options, failures, ZipExtractionRoundTrip);
         RunTest("WinVerifyTrust state cleanup", options, failures, WinVerifyTrustStateCleanup);
+        RunTest("Localization resource lookup", options, failures, LocalizationResourceLookup);
 
         if (failures.Count == 0)
         {
@@ -112,6 +115,31 @@ internal static class Program
         bool hasAccessibleDetails = NativeMethods.TryGetAccessibleDetailsAtPoint(point, out int role, out string name);
         if (hasAccessibleDetails || role != 0 || name.Length != 0)
             throw new InvalidOperationException("Accessible details baseline contract was violated.");
+    }
+
+    private static void LocalizationResourceLookup()
+    {
+        CultureInfo originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo originalUiCulture = CultureInfo.CurrentUICulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+            if (!string.Equals(Strings.Enabled, "Enabled", StringComparison.Ordinal))
+                throw new InvalidOperationException("Neutral English resource fallback failed.");
+
+            CultureInfo zhHans = CultureInfo.GetCultureInfo("zh-Hans");
+            CultureInfo.CurrentCulture = zhHans;
+            CultureInfo.CurrentUICulture = zhHans;
+            if (!string.Equals(Strings.Enabled, "启用", StringComparison.Ordinal))
+                throw new InvalidOperationException("Simplified Chinese resource lookup failed.");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     private static void MouseClickRoutingLogic()
