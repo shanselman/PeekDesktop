@@ -344,9 +344,18 @@ public sealed class DesktopPeek : IDisposable
                 AppDiagnostics.Log($"Captured {_windowTracker.SavedWindowCount} window(s); applying {_activePeekMode} effect");
 
                 if (_activePeekMode == PeekMode.FlyAway)
-                    _windowTracker.FlyAwayAll();
+                {
+                    if (!_windowTracker.FlyAwayAll())
+                    {
+                        _windowTracker.ClearSavedWindows();
+                        AppDiagnostics.Log("Fly Away did not start because crash recovery protection was unavailable");
+                        return;
+                    }
+                }
                 else
+                {
                     _windowTracker.MinimizeAll();
+                }
 
                 _isPeeking = true;
                 _ignoreFocusUntil = Environment.TickCount64 + PostPeekFocusGracePeriodMs;

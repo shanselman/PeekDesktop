@@ -51,6 +51,7 @@ public static class Program
         {
             ConfigureTraceLogging();
             AppDiagnostics.Log("Program starting");
+            FlyAwayRecovery.RecoverIfNeeded();
 
             using var messageLoop = new Win32MessageLoop();
             AppDiagnostics.Log("Message loop created");

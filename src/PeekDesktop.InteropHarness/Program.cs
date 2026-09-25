@@ -28,6 +28,8 @@ internal static class Program
         RunTest("Notification state stress", options, failures, NotificationStateStress);
         RunTest("Malformed input contracts", options, failures, MalformedInputContracts);
         RunTest("Mouse click routing logic", options, failures, MouseClickRoutingLogic);
+        RunTest("Fly Away recovery serialization", options, failures, FlyAwayRecoverySerialization);
+        RunTest("Fly Away recovery invalid handles", options, failures, FlyAwayRecoveryInvalidHandles);
         RunTest($"Leak probe ({options.Iterations:N0} iterations)", options, failures, () => LeakProbe(options));
 
         // Auto-updater tests
@@ -296,6 +298,63 @@ internal static class Program
         hook.DispatchMouseClick(IntPtr.Zero, origin);
         if (queuedAction is null)
             throw new InvalidOperationException("Mouse classification was not deferred through the supplied dispatcher.");
+    }
+
+    private static void FlyAwayRecoverySerialization()
+    {
+        var placement = new NativeMethods.WINDOWPLACEMENT
+        {
+            length = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.WINDOWPLACEMENT>(),
+            flags = 7,
+            showCmd = NativeMethods.SW_MAXIMIZE,
+            ptMinPosition = new NativeMethods.POINT { x = 1, y = 2 },
+            ptMaxPosition = new NativeMethods.POINT { x = 3, y = 4 },
+            rcNormalPosition = new NativeMethods.RECT
+            {
+                Left = -1200,
+                Top = 100,
+                Right = -200,
+                Bottom = 900
+            }
+        };
+        var expected = new FlyAwayRecoveryWindow(
+            123456,
+            42,
+            placement,
+            new NativeMethods.RECT { Left = -1300, Top = 50, Right = -100, Bottom = 950 });
+
+        byte[] json = FlyAwayRecovery.Serialize([expected]);
+        List<FlyAwayRecoveryWindow> restored = FlyAwayRecovery.Deserialize(json);
+        if (restored.Count != 1
+            || restored[0].Handle != expected.Handle
+            || restored[0].ProcessId != expected.ProcessId
+            || restored[0].Placement.flags != expected.Placement.flags
+            || restored[0].Placement.showCmd != expected.Placement.showCmd
+            || restored[0].Placement.ptMinPosition.x != expected.Placement.ptMinPosition.x
+            || restored[0].Placement.ptMaxPosition.y != expected.Placement.ptMaxPosition.y
+            || restored[0].Placement.rcNormalPosition.Left != expected.Placement.rcNormalPosition.Left
+            || restored[0].Bounds.Bottom != expected.Bounds.Bottom)
+        {
+            throw new InvalidOperationException("Fly Away recovery snapshot did not round-trip.");
+        }
+    }
+
+    private static void FlyAwayRecoveryInvalidHandles()
+    {
+        var placement = new NativeMethods.WINDOWPLACEMENT
+        {
+            length = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.WINDOWPLACEMENT>(),
+            showCmd = NativeMethods.SW_SHOWNORMAL
+        };
+        FlyAwayRecoveryResult result = FlyAwayRecovery.RecoverWindows(
+        [
+            new FlyAwayRecoveryWindow(0, 1, placement, default),
+            new FlyAwayRecoveryWindow(-1, 1, placement, default),
+            new FlyAwayRecoveryWindow(int.MaxValue, 1, placement, default)
+        ]);
+
+        if (result.Recovered != 0 || result.Skipped != 3)
+            throw new InvalidOperationException("Invalid Fly Away recovery handles were not skipped safely.");
     }
 
     private static void InvalidHandleMatrix()

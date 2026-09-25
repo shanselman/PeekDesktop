@@ -294,6 +294,7 @@ internal static class NativeMethods
     public const uint CWP_SKIPTRANSPARENT = 0x0004;
 
     // --- Monitor info ---
+    public const uint MONITOR_DEFAULTTONULL = 0;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
     [DllImport("user32.dll")]

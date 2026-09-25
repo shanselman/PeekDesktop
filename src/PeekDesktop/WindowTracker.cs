@@ -99,16 +99,44 @@ public sealed class WindowTracker
     /// Move captured windows toward the corner of the screen they are already closest to.
     /// This is an experiment to mimic macOS-style "show desktop" animation.
     /// </summary>
-    public void FlyAwayAll()
+    public bool FlyAwayAll()
     {
         var stopwatch = Stopwatch.StartNew();
-        var animationWindows = new List<AnimatedWindow>(_savedWindows.Count);
+        var recoverableWindows = new List<WindowInfo>(_savedWindows.Count);
+        var recoverySnapshot = new List<FlyAwayRecoveryWindow>(_savedWindows.Count);
 
         foreach (var window in _savedWindows)
         {
             if (!NativeMethods.IsWindow(window.Handle))
                 continue;
 
+            _ = NativeMethods.GetWindowThreadProcessId(window.Handle, out uint processId);
+            if (processId == 0)
+                continue;
+
+            recoverableWindows.Add(window);
+            recoverySnapshot.Add(new FlyAwayRecoveryWindow(
+                window.Handle.ToInt64(),
+                processId,
+                window.Placement,
+                window.Bounds));
+        }
+
+        if (recoverySnapshot.Count == 0)
+        {
+            AppDiagnostics.Log("Fly Away skipped because no recoverable windows remained");
+            return false;
+        }
+
+        if (!FlyAwayRecovery.TryWriteSnapshot(recoverySnapshot))
+        {
+            AppDiagnostics.Log("Fly Away aborted because its recovery snapshot could not be persisted");
+            return false;
+        }
+
+        var animationWindows = new List<AnimatedWindow>(recoverableWindows.Count);
+        foreach (var window in recoverableWindows)
+        {
             var workingPlacement = window.Placement;
             workingPlacement.length = Marshal.SizeOf<NativeMethods.WINDOWPLACEMENT>();
 
@@ -127,6 +155,7 @@ public sealed class WindowTracker
 
         AnimateWindows(animationWindows);
         AppDiagnostics.Metric($"FlyAwayAll: {animationWindows.Count} window(s) in {stopwatch.ElapsedMilliseconds}ms");
+        return animationWindows.Count > 0;
     }
 
     /// <summary>
@@ -176,6 +205,9 @@ public sealed class WindowTracker
         }
 
         _savedWindows.Clear();
+        if (peekMode == PeekMode.FlyAway)
+            FlyAwayRecovery.ClearSnapshot();
+
         AppDiagnostics.Log("Restore list cleared");
         AppDiagnostics.Metric($"RestoreAll: {restoredCount} window(s) in {stopwatch.ElapsedMilliseconds}ms");
     }
